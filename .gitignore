@@ -1,0 +1,8 @@
+.DS_Store
+.codegraph/
+.superpowers/
+.idea/
+.vscode/
+*.bak
+*.swp
+*.tmp
