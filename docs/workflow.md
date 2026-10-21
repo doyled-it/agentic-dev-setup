@@ -24,13 +24,15 @@ Classify the work early:
 
 Read the applicable `AGENTS.md` and tool-specific instruction files. Inspect the branch, working tree, remotes, recent commits, build files, and test entry points. Preserve unrelated changes.
 
-If the repository already contains `.codegraph/`, sync it and use graph queries to locate symbols, callers, callees, tests, and likely change impact. Do not create an index without the operator's direction. CodeGraph is a navigation aid. The current source and tests remain the authority.
+Invoke `development-loop` before meaningful implementation, and `using-codegraph` before understanding code. Close missing-index gaps with `codegraph init . --yes` at each relevant repository root. Sync an existing index with `codegraph sync .`, then query symbols, callers, callees, tests, and likely change impact. An explicit operator restriction overrides automatic indexing. If the relevant files are unsupported or yield no useful graph, report the limit and read those files directly after the graph check. The current source and tests remain the authority.
 
 End discovery with a concrete scope: the behavior that changes, the files or interfaces likely involved, the evidence still missing, and the commands that can prove the result.
 
 ## 2. Brainstorm and design
 
 State the user-visible result and the constraints. Compare plausible approaches when the choice affects maintainability, compatibility, or rollout. Pick one design and record the important tradeoffs.
+
+Invoke `superpowers:brainstorming` for this phase and `superpowers:writing-plans` for the next. Carry forward decisions and implementation authority the operator already supplied.
 
 For bounded work, a short design in the session is enough. Architectural work deserves a written design, but generated design files should remain outside the product commit unless the repository treats them as durable documentation.
 
@@ -66,6 +68,8 @@ Delegate only when a task has a narrow owner, a clear input, and a specific retu
 
 Keep dependent edits sequential. Run independent research or reviews in parallel. Give every implementation agent the same design, repository instructions, test command, and commit boundary. Review each task before accepting it into the whole change.
 
+Use `superpowers:subagent-driven-development` with `superpowers:test-driven-development`. When the host lacks subagents or the operator requests inline execution, use `superpowers:executing-plans` and preserve the same verification and review gates.
+
 ## 6. Review the complete change
 
 Use fresh eyes after implementation. A useful review checks:
@@ -79,6 +83,8 @@ Use fresh eyes after implementation. A useful review checks:
 - accidental files, generated plans, credentials, and private paths.
 
 Treat review findings as hypotheses to verify. Apply fixes with the same test-first discipline when they change behavior.
+
+Invoke `superpowers:requesting-code-review`, then `superpowers:verification-before-completion` and `superpowers:finishing-a-development-branch`. If a host names a skill differently, resolve its installed name. If it is missing, perform the phase directly and disclose the fallback.
 
 ## 7. Verify and finish
 

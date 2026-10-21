@@ -12,7 +12,7 @@ The installer uses the same pattern for global guidance:
 - Claude Code managed block: `~/.claude/CLAUDE.md`;
 - Codex managed block: `~/.codex/AGENTS.md`.
 
-Existing text outside the managed markers stays in place.
+Existing user text outside the managed setup and CodeGraph markers stays in place. The canonical workflow replaces older CodeGraph marker blocks to avoid contradictory indexing instructions.
 
 ## Core plugin tier
 
@@ -22,7 +22,7 @@ The default install is the part of the setup that directly controls development 
 | --- | --- | --- |
 | `superpowers` | [obra/superpowers-marketplace](https://github.com/obra/superpowers-marketplace) | Brainstorming, planning, TDD, debugging, review, worktrees, and finishing. |
 | `development-loop` | [doyled-it/claude-skills](https://github.com/doyled-it/claude-skills) | Connects discovery, design, planning, implementation, and finishing. |
-| `codegraph` | [doyled-it/claude-skills](https://github.com/doyled-it/claude-skills) | Tells agents when and how to use an existing CodeGraph index. |
+| `codegraph` | [doyled-it/claude-skills](https://github.com/doyled-it/claude-skills) | Closes missing-index gaps, syncs existing indexes, and guides symbol and impact queries. |
 | `cross-repo-completeness` | [doyled-it/claude-skills](https://github.com/doyled-it/claude-skills) | Checks contracts, consumers, UI, configuration, deployment, tests, and docs across repositories. |
 
 Each plugin is installed through the native Claude Code or Codex plugin manager. Native installation provides one update path and avoids duplicate skill names from copied directories.
@@ -48,6 +48,8 @@ typescript-lsp
 
 These selected plugins come from Anthropic's official marketplace, which includes both Anthropic and third-party packages. They cover specialist review, documentation maintenance, security, frontend work, browser automation, plugin authoring, MCP development, and language intelligence. Their names and availability may change independently of this repository. OpenAI documents its compatible [marketplace commands and package format](https://developers.openai.com/plugins/build/plugins).
 
+Installation and authentication are separate. In live validation, Context7 installed successfully but its MCP endpoint requested OAuth before use. Language-service plugins also need their language-server binaries, and browser automation may need browser downloads. Review each selected plugin's setup requirements. The core tier avoids making unrelated services prerequisites for a development session.
+
 ## CodeGraph
 
 [CodeGraph](https://github.com/colbymchenry/codegraph) builds a local code graph and exposes symbol, call-path, impact, and affected-test queries. The installer:
@@ -56,11 +58,11 @@ These selected plugins come from Anthropic's official marketplace, which include
 2. otherwise installs the pinned npm package from `dependencies.env`;
 3. disables telemetry;
 4. registers CodeGraph only with the agents selected by this installer;
-5. leaves repository indexing to the operator.
+5. leaves project discovery to the development task, without crawling unrelated repositories during bootstrap.
 
-Use `--index PATH` to opt into indexing. The installer runs `codegraph init PATH` when `.codegraph/` is absent and `codegraph sync PATH` when it exists. Repeat the option for sibling repositories.
+Use `--index PATH` to prepare indexes during installation. The installer runs `codegraph init PATH --yes` when `.codegraph/` is absent and `codegraph sync PATH` when it exists. Repeat the option for sibling repositories.
 
-The durable instruction is deliberately narrower: when `.codegraph/` exists, use it before broad text searches for code relationships. When no index exists, continue with normal repository tools.
+The development default is to close index gaps. Invoke `using-codegraph`, initialize each missing task-repository index, sync existing ones, and query before broad code searches. An explicit no-index instruction takes precedence. CodeGraph does not support every source type; after a graph check finds no useful symbols for unsupported files, inspect those files directly and record the limitation.
 
 ## Development environment versions
 

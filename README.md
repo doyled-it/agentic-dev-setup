@@ -27,10 +27,12 @@ The default install adds the core workflow. To mirror the broader plugin set I u
 - Managed instruction blocks for Claude Code and Codex. Existing content outside the blocks stays intact.
 - [Superpowers](https://github.com/obra/superpowers), installed through its native marketplace.
 - My [development-loop, codegraph, and cross-repo-completeness plugins](https://github.com/doyled-it/claude-skills).
-- [CodeGraph](https://github.com/colbymchenry/codegraph) configuration with telemetry disabled. The installer does not index repositories unless you pass `--index`.
+- [CodeGraph](https://github.com/colbymchenry/codegraph) configuration with telemetry disabled. Bootstrap indexes only paths supplied with `--index`; development tasks initialize missing indexes in the repositories they need to inspect.
 - Codex multi-agent support when Codex is present.
 
 Plugins are installed through each agent's plugin manager. The script does not copy or symlink plugin skills into a second location, which avoids duplicate skill discovery and keeps updates tied to the marketplace.
+
+The global instructions explicitly invoke `development-loop`, `using-codegraph`, and `cross-repo-completeness`, plus the Superpowers phases they compose. Missing task-repository indexes are closed before code discovery. Explicit operator restrictions take precedence, and unsupported source types receive direct inspection after the graph check.
 
 ## Installer modes
 
@@ -59,13 +61,15 @@ Run `./install.sh --help` for the current option list.
 
 The installer creates one timestamped transaction before changing instruction files. Repeated runs that would make no instruction changes do not create another backup.
 
+CodeGraph registration also writes instruction files. The installer snapshots those files before registration, restores that snapshot before applying its canonical block, and removes obsolete marker-fenced CodeGraph guidance so indexing policy has one source. User content outside the setup and CodeGraph markers is preserved. `--skip-instructions` also suppresses instruction changes caused by registration.
+
 Restore the most recent instruction state with:
 
 ```bash
 ./scripts/restore.sh latest
 ```
 
-The restore script only reverts files managed by the selected transaction. Plugin installations, marketplace entries, Codex multi-agent support, and CodeGraph registration use native removal commands documented in [docs/removal.md](docs/removal.md).
+The restore script only reverts instruction files managed by the selected transaction. Plugin installations, marketplace entries, Codex multi-agent support, and CodeGraph registration use native removal commands documented in [docs/removal.md](docs/removal.md).
 
 ## Requirements
 
