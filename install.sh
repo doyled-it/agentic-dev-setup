@@ -169,6 +169,9 @@ describe_dry_run() {
   say "Would install core plugins for $targets"
   if [[ $FULL_INSTALL == true ]]; then
     say "Would install the extended official-marketplace plugin set for $targets"
+    say 'Would remove retired Context7 and thin Playwright plugins for selected agents'
+    say 'Would download language servers, Playwright MCP, Chromium, and missing Python/GitHub CLI helpers'
+    say 'Would verify LSP handshakes and browser navigation; Claude Security is Claude-only'
   fi
   if [[ $SKIP_CODEGRAPH == false ]]; then
     say 'Would install and configure CodeGraph'
@@ -503,6 +506,7 @@ install_claude_core() {
 install_claude_full() {
   local plugin
   say 'Installing full Claude Code plugin set'
+  retire_full_plugins claude
   if ! claude_marketplace "$OFFICIAL_MARKETPLACE" "$OFFICIAL_MARKETPLACE_NAME"; then
     warn "could not configure $OFFICIAL_MARKETPLACE_NAME for Claude Code"
     FULL_FAILURES=$((FULL_FAILURES + 1))
@@ -540,15 +544,46 @@ install_codex_core() {
 install_codex_full() {
   local plugin
   say 'Installing full Codex plugin set'
+  retire_full_plugins codex
   if ! codex_marketplace "$OFFICIAL_MARKETPLACE" "$OFFICIAL_MARKETPLACE_NAME"; then
     warn "could not configure $OFFICIAL_MARKETPLACE_NAME for Codex"
     FULL_FAILURES=$((FULL_FAILURES + 1))
     return
   fi
   for plugin in $EXTENDED_MARKETPLACE_PLUGINS; do
+    if [[ $plugin == claude-security ]]; then
+      say 'Skipping Claude Security in Codex: it requires Claude Code Workflow support'
+      continue
+    fi
     if ! codex plugin add "$plugin@$OFFICIAL_MARKETPLACE_NAME" >/dev/null; then
       warn "could not install $plugin for Codex"
       FULL_FAILURES=$((FULL_FAILURES + 1))
+    fi
+  done
+}
+
+retire_full_plugins() {
+  local host=$1
+  local inventory="$WORK_DIR/$host-plugins.json"
+  local plugin
+  local present
+  local retired='context7 playwright'
+  [[ $host != codex ]] || retired="$retired claude-security"
+  "$host" plugin list --json >"$inventory"
+  for plugin in $retired; do
+    present=$(node - "$inventory" "$host" "$plugin@$OFFICIAL_MARKETPLACE_NAME" <<'JS'
+const fs = require('node:fs');
+const [file, host, id] = process.argv.slice(2);
+const inventory = JSON.parse(fs.readFileSync(file, 'utf8'));
+const present = host === 'claude' ? inventory.some(item => item.id === id) :
+  inventory.installed.some(item => item.pluginId === id && item.installed);
+console.log(present ? 'yes' : 'no');
+JS
+    )
+    if [[ $present == yes ]]; then
+      say "Removing retired $plugin plugin from $host"
+      if [[ $host == claude ]]; then claude plugin uninstall "$plugin@$OFFICIAL_MARKETPLACE_NAME" >/dev/null
+      else codex plugin remove "$plugin@$OFFICIAL_MARKETPLACE_NAME" >/dev/null; fi
     fi
   done
 }
@@ -614,6 +649,9 @@ if [[ $DRY_RUN == true ]]; then
   exit 0
 fi
 validate_explicit_targets
+if [[ $FULL_INSTALL == true ]]; then
+  bash "$ROOT/scripts/install-full-runtime.sh" --preflight
+fi
 if [[ $SKIP_CODEGRAPH == false ]]; then
   snapshot_instructions
 fi
@@ -630,6 +668,14 @@ if [[ $INSTALL_CODEX == true ]]; then
   install_codex_core
   if [[ $FULL_INSTALL == true ]] && command -v codex >/dev/null 2>&1; then
     install_codex_full
+  fi
+fi
+if [[ $FULL_INSTALL == true ]]; then
+  runtime_targets=()
+  if [[ $INSTALL_CLAUDE == true ]] && command -v claude >/dev/null 2>&1; then runtime_targets+=(--claude); fi
+  if [[ $INSTALL_CODEX == true ]] && command -v codex >/dev/null 2>&1; then runtime_targets+=(--codex); fi
+  if ((${#runtime_targets[@]} > 0)); then
+    bash "$ROOT/scripts/install-full-runtime.sh" "${runtime_targets[@]}"
   fi
 fi
 if [[ $SKIP_CODEGRAPH == false ]]; then

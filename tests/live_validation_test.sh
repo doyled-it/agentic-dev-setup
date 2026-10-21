@@ -78,7 +78,7 @@ case "$HOME" in
   *) printf 'fixture HOME must contain spaces\n'; exit 78 ;;
 esac
 [ "$CODEX_HOME" = "$HOME/.codex" ] || exit 78
-[ "$CLAUDE_CONFIG_DIR" = "$HOME/.claude" ] || exit 78
+[ -z "${CLAUDE_CONFIG_DIR-}" ] || exit 78
 [ -n "$npm_config_prefix" ] || exit 78
 [ "$DO_NOT_TRACK" = 1 ] && [ "$CODEGRAPH_TELEMETRY" = 0 ] || exit 78
 [ -z "${OPENAI_API_KEY-}${ANTHROPIC_API_KEY-}${SSH_AUTH_SOCK-}${GITHUB_TOKEN-}" ] || exit 78
