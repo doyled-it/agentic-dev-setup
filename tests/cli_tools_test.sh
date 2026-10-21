@@ -60,7 +60,8 @@ printf '%s\n' "$*" >> "$CASE_DIR/python-installs"
 [[ ${NO_PYTHON:-0} == 0 ]] || exit 0
 cp "$CASE_DIR/python3" "$UV_PYTHON_BIN_DIR/python3"
 MOCK
-  chmod +x "$CASE_DIR/tools/"* "$CASE_DIR/gh" "$CASE_DIR/python3" "$CASE_DIR/uv"
+  chmod +x "$CASE_DIR/tools/uname" "$CASE_DIR/tools/curl" "$CASE_DIR/tools/tar" \
+    "$CASE_DIR/gh" "$CASE_DIR/python3" "$CASE_DIR/uv"
 }
 run() {
   env HOME="$CASE_DIR/home" PATH="$BIN_DIR:$CASE_DIR/tools" REAL_TAR="$TAR" \
