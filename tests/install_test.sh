@@ -81,6 +81,22 @@ MOCK
   chmod +x "$path"
 }
 
+write_instruction_mutating_codegraph_mock() {
+  cat >"$TEST_BIN/codegraph" <<'MOCK'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'codegraph %s\n' "$*" >>"$MOCK_LOG"
+if [[ ${1:-} == install ]]; then
+  mkdir -p "$HOME/.claude" "$HOME/.codex"
+  for target in "$HOME/.claude/CLAUDE.md" "$HOME/.codex/AGENTS.md"; do
+    printf '%s\n' '<!-- CODEGRAPH_START -->' 'Skip it when there is no index; indexing is the operator choice.' '<!-- CODEGRAPH_END -->' >>"$target"
+  done
+  if [[ ${FAIL_REGISTRATION:-false} == true ]]; then exit 8; fi
+fi
+MOCK
+  chmod +x "$TEST_BIN/codegraph"
+}
+
 write_failing_claude_mock() {
   local mode=$1
   local path="$TEST_BIN/claude"
@@ -192,7 +208,7 @@ scenario_core_install_is_native_reversible_and_idempotent() {
   cmp -s "$ROOT/AGENTS.md" "$canonical_file" || fail 'canonical AGENTS.md copy differs'
   assert_file_contains "$claude_file" 'keep claude'
   assert_file_contains "$claude_file" '<!-- BEGIN agentic-dev-setup -->'
-  assert_file_contains "$claude_file" "@$canonical_file"
+  assert_file_contains "$claude_file" "@$TEST_SANDBOX/home\\ with\\ spaces/.config/agentic-dev-setup/AGENTS.md"
   assert_file_contains "$codex_file" 'keep codex'
   assert_file_contains "$codex_file" '<!-- BEGIN agentic-dev-setup -->'
   assert_file_contains "$codex_file" '# Agent Instructions'
@@ -370,6 +386,17 @@ scenario_opt_outs_skip_requested_components() {
   assert_path_absent "$TEST_HOME/.config/agentic-dev-setup/AGENTS.md"
   assert_path_absent "$TEST_HOME/.claude/CLAUDE.md"
   assert_path_absent "$TEST_HOME/.codex/AGENTS.md"
+
+  mkdir -p "$TEST_HOME/.claude" "$TEST_HOME/.codex"
+  printf 'Dotfile-managed instructions\n' >"$TEST_SANDBOX/shared-instructions"
+  ln -s "$TEST_SANDBOX/shared-instructions" "$TEST_HOME/.claude/CLAUDE.md"
+  ln -s "$TEST_SANDBOX/shared-instructions" "$TEST_HOME/.codex/AGENTS.md"
+  : >"$MOCK_LOG"
+  run_install --skip-codegraph --skip-instructions --no-multi-agent >"$TEST_SANDBOX/symlink-opt-out.out"
+  [[ -L $TEST_HOME/.claude/CLAUDE.md && -L $TEST_HOME/.codex/AGENTS.md ]] || fail 'plugin-only install replaced instruction symlinks'
+  [[ $(cat "$TEST_SANDBOX/shared-instructions") == 'Dotfile-managed instructions' ]] || fail 'plugin-only install changed symlink targets'
+  assert_log_contains 'claude plugin install development-loop@doyled-it-skills -y'
+  assert_log_contains 'codex plugin add development-loop@doyled-it-skills'
   pass 'opt-out flags skip their components'
 }
 
@@ -412,6 +439,45 @@ scenario_help_is_available() {
   assert_file_contains "$TEST_SANDBOX/help.out" 'Usage:'
   assert_file_contains "$TEST_SANDBOX/help.out" '--index PATH'
   pass 'help documents installer modes'
+}
+
+scenario_codegraph_instruction_side_effects_are_reversible() {
+  local target
+  new_sandbox
+  write_recording_mock claude
+  write_recording_mock codex
+  write_instruction_mutating_codegraph_mock
+  mkdir -p "$TEST_HOME/.claude" "$TEST_HOME/.codex"
+  printf 'Original Claude instructions\n' >"$TEST_HOME/.claude/CLAUDE.md"
+  printf 'Original Codex instructions\n' >"$TEST_HOME/.codex/AGENTS.md"
+  cp "$TEST_HOME/.claude/CLAUDE.md" "$TEST_SANDBOX/claude.before"
+  cp "$TEST_HOME/.codex/AGENTS.md" "$TEST_SANDBOX/codex.before"
+
+  run_install >"$TEST_SANDBOX/install.out"
+  env HOME="$TEST_HOME" bash "$ROOT/scripts/restore.sh" latest >"$TEST_SANDBOX/restore.out"
+  cmp -s "$TEST_HOME/.claude/CLAUDE.md" "$TEST_SANDBOX/claude.before" || fail 'restore captured CodeGraph output instead of original Claude instructions'
+  cmp -s "$TEST_HOME/.codex/AGENTS.md" "$TEST_SANDBOX/codex.before" || fail 'restore captured CodeGraph output instead of original Codex instructions'
+
+  run_install --skip-instructions >"$TEST_SANDBOX/skip.out"
+  cmp -s "$TEST_HOME/.claude/CLAUDE.md" "$TEST_SANDBOX/claude.before" || fail 'CodeGraph violated --skip-instructions for Claude'
+  cmp -s "$TEST_HOME/.codex/AGENTS.md" "$TEST_SANDBOX/codex.before" || fail 'CodeGraph violated --skip-instructions for Codex'
+
+  if FAIL_REGISTRATION=true run_install >"$TEST_SANDBOX/failure.out" 2>&1; then
+    fail 'failed CodeGraph registration should fail setup'
+  fi
+  cmp -s "$TEST_HOME/.claude/CLAUDE.md" "$TEST_SANDBOX/claude.before" || fail 'failed CodeGraph registration changed original Claude instructions'
+  cmp -s "$TEST_HOME/.codex/AGENTS.md" "$TEST_SANDBOX/codex.before" || fail 'failed CodeGraph registration changed original Codex instructions'
+
+  for target in "$TEST_HOME/.claude/CLAUDE.md" "$TEST_HOME/.codex/AGENTS.md"; do
+    printf '%s\n' '<!-- CODEGRAPH_START -->' 'Skip it when there is no index; indexing is the operator choice.' '<!-- CODEGRAPH_END -->' >>"$target"
+  done
+  run_install >"$TEST_SANDBOX/legacy.out"
+  if grep -Fq 'Skip it when there is no index' "$TEST_HOME/.claude/CLAUDE.md" "$TEST_HOME/.codex/AGENTS.md"; then
+    fail 'legacy CodeGraph marker block contradicts the canonical indexing policy'
+  fi
+  assert_file_contains "$TEST_HOME/.claude/CLAUDE.md" 'Original Claude instructions'
+  assert_file_contains "$TEST_HOME/.codex/AGENTS.md" 'Original Codex instructions'
+  pass 'CodeGraph instruction side effects preserve restore, opt-outs, and coherent policy'
 }
 
 scenario_marketplace_and_plugin_failures_are_not_masked() {
@@ -462,6 +528,7 @@ scenario_opt_outs_skip_requested_components
 scenario_dry_run_makes_no_changes
 scenario_explicit_index_initializes_then_syncs_path_with_spaces
 scenario_help_is_available
+scenario_codegraph_instruction_side_effects_are_reversible
 scenario_marketplace_and_plugin_failures_are_not_masked
 
 printf '\nAll installer tests passed\n'

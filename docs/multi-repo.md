@@ -20,7 +20,7 @@ Inspect the hub for service versions, environment variables, deployment order, n
 
 ## Build the seam map
 
-Map the complete change before choosing files. Record evidence for every relevant row.
+Invoke `cross-repo-completeness` during design, and use `using-codegraph` in each sibling repository. Initialize missing indexes, sync existing indexes, and verify each graph's checkout before delegating exploration. Map the complete change before choosing files. Record evidence for every relevant row.
 
 | Surface | Evidence to locate |
 | --- | --- |
@@ -63,6 +63,6 @@ Use digests or explicit versions where the system requires repeatable builds. Re
 
 ## Finish from the hub
 
-Return to the hub repository for the final audit. Verify sibling branch states, contract compatibility, package or image references, configuration, deployment order, acceptance tests, and documentation.
+Return to the hub repository and invoke `cross-repo-completeness` in audit mode. Verify sibling branch states, contract compatibility, package or image references, configuration, deployment order, acceptance tests, and documentation.
 
 Do not report the system change as complete because every individual repository has green unit tests. Completion requires evidence that the assembled system exposes the intended behavior.

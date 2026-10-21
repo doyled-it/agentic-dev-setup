@@ -2,7 +2,7 @@
 
 Implement `[task]` in `[repository]` using the full development loop.
 
-Read the applicable instructions and inspect repository state before editing. Use an isolated feature or fix branch and preserve unrelated changes. If `.codegraph/` exists, sync it and use CodeGraph for symbol discovery and impact analysis.
+Invoke `development-loop` before implementation. Read applicable instructions and inspect repository state before editing. Use an isolated feature or fix branch and preserve unrelated changes. Invoke `using-codegraph`, initialize missing indexes, sync existing indexes, and query symbols and impact before editing. Explicit operator no-index restrictions take precedence; report unsupported source types and inspect them directly after checking the graph.
 
 Before production edits, state the bounded design and write a task plan with independent verification points. For every behavior change, follow RED, GREEN, REFACTOR: add a focused test, run it to confirm the expected failure, implement the smallest passing change, then refactor while tests remain green.
 

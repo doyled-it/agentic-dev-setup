@@ -29,8 +29,29 @@ FULL_FAILURES=0
 INDEX_PATHS=('')
 INDEX_COUNT=0
 PENDING_TRANSACTION=''
+INSTRUCTION_SNAPSHOT_READY=false
+
+restore_instruction_snapshot() {
+  local key
+  local target
+  [[ $INSTRUCTION_SNAPSHOT_READY == true ]] || return 0
+  for key in claude codex; do
+    [[ -f $WORK_DIR/$key.original-state ]] || continue
+    if [[ $key == claude ]]; then target=$CLAUDE_FILE; else target=$CODEX_FILE; fi
+    [[ ! -L $target ]] || die "instruction target became a symlink: $target"
+    if [[ $(cat "$WORK_DIR/$key.original-state") == present ]]; then
+      mkdir -p -- "$(dirname "$target")"
+      cp -p -- "$WORK_DIR/$key.original" "$target"
+    else
+      [[ ! -e $target || -f $target ]] || die "instruction target must be a regular file: $target"
+      rm -f -- "$target"
+    fi
+  done
+  INSTRUCTION_SNAPSHOT_READY=false
+}
 
 cleanup() {
+  restore_instruction_snapshot
   rm -rf -- "$WORK_DIR"
   if [[ -n $PENDING_TRANSACTION ]]; then
     rm -rf -- "$PENDING_TRANSACTION"
@@ -166,6 +187,8 @@ describe_dry_run() {
 
 managed_block_count() {
   local file=$1
+  local begin_marker=${2:-$BEGIN_MARKER}
+  local end_marker=${3:-$END_MARKER}
   local count_output
 
   if [[ ! -e $file ]]; then
@@ -173,7 +196,7 @@ managed_block_count() {
     return
   fi
   [[ -f $file && ! -L $file ]] || die "$file must be a regular file"
-  if ! count_output=$(awk -v begin="$BEGIN_MARKER" -v end="$END_MARKER" '
+  if ! count_output=$(awk -v begin="$begin_marker" -v end="$end_marker" '
     BEGIN { state=0; count=0; invalid=0 }
     $0 == begin {
       if (state != 0 || count != 0) invalid=1
@@ -194,6 +217,48 @@ managed_block_count() {
     return 1
   fi
   printf '%s\n' "$count_output"
+}
+
+snapshot_instructions() {
+  local key
+  local target
+  for key in claude codex; do
+    if [[ $key == claude ]]; then
+      [[ $INSTALL_CLAUDE == true ]] || continue
+      target=$CLAUDE_FILE
+    else
+      [[ $INSTALL_CODEX == true ]] || continue
+      target=$CODEX_FILE
+    fi
+    if [[ -e $target || -L $target ]]; then
+      [[ -f $target && ! -L $target ]] || die "$target must be a regular file"
+      cp -p -- "$target" "$WORK_DIR/$key.original"
+      printf 'present\n' >"$WORK_DIR/$key.original-state"
+    else
+      printf 'absent\n' >"$WORK_DIR/$key.original-state"
+    fi
+  done
+  INSTRUCTION_SNAPSHOT_READY=true
+}
+
+without_codegraph_guidance() {
+  local target=$1
+  local output=$2
+  local count
+  if ! count=$(managed_block_count "$target" '<!-- CODEGRAPH_START -->' '<!-- CODEGRAPH_END -->'); then
+    die "$target contains malformed CodeGraph instruction markers"
+  fi
+  if [[ ! -e $target ]]; then
+    : >"$output"
+  elif [[ $count == 0 ]]; then
+    cp -- "$target" "$output"
+  else
+    awk '
+      $0 == "<!-- CODEGRAPH_START -->" { skipping=1; next }
+      $0 == "<!-- CODEGRAPH_END -->" { skipping=0; next }
+      !skipping { print }
+    ' "$target" >"$output"
+  fi
 }
 
 render_managed_file() {
@@ -239,10 +304,12 @@ files_differ() {
 prepare_instructions() {
   local claude_block="$WORK_DIR/claude.block"
   local codex_block="$WORK_DIR/codex.block"
+  local claude_import_path
+  claude_import_path=${CANONICAL_FILE// /\\ }
 
   {
     printf '%s\n' "$BEGIN_MARKER"
-    printf '@%s\n' "$CANONICAL_FILE"
+    printf '@%s\n' "$claude_import_path"
     printf '%s\n' "$END_MARKER"
   } >"$claude_block"
 
@@ -254,10 +321,12 @@ prepare_instructions() {
 
   cp -- "$ROOT/AGENTS.md" "$WORK_DIR/canonical.desired"
   if [[ $INSTALL_CLAUDE == true ]]; then
-    render_managed_file "$CLAUDE_FILE" "$claude_block" "$WORK_DIR/claude.desired"
+    without_codegraph_guidance "$CLAUDE_FILE" "$WORK_DIR/claude.base"
+    render_managed_file "$WORK_DIR/claude.base" "$claude_block" "$WORK_DIR/claude.desired"
   fi
   if [[ $INSTALL_CODEX == true ]]; then
-    render_managed_file "$CODEX_FILE" "$codex_block" "$WORK_DIR/codex.desired"
+    without_codegraph_guidance "$CODEX_FILE" "$WORK_DIR/codex.base"
+    render_managed_file "$WORK_DIR/codex.base" "$codex_block" "$WORK_DIR/codex.desired"
   fi
 
   if files_differ "$WORK_DIR/canonical.desired" "$CANONICAL_FILE"; then
@@ -545,6 +614,9 @@ if [[ $DRY_RUN == true ]]; then
   exit 0
 fi
 validate_explicit_targets
+if [[ $SKIP_CODEGRAPH == false ]]; then
+  snapshot_instructions
+fi
 if [[ $SKIP_INSTRUCTIONS == false ]]; then
   prepare_instructions
 fi
@@ -564,6 +636,7 @@ if [[ $SKIP_CODEGRAPH == false ]]; then
   configure_codegraph
   index_repositories
 fi
+restore_instruction_snapshot
 if [[ $SKIP_INSTRUCTIONS == false ]]; then
   apply_instructions
 fi
