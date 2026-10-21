@@ -99,7 +99,7 @@ git_remote_host() {
 
 is_public_git_host() {
   case "$1" in
-    github.com|gist.github.com|gitlab.com|bitbucket.org|codeberg.org|git.sr.ht)
+    github.com|gist.github.com|gitlab.com|bitbucket.org|codeberg.org|git.sr.ht|code.claude.com|developers.openai.com|docs.github.com)
       return 0
       ;;
     *)
@@ -116,7 +116,7 @@ require_public_git_hosts() {
   local host
   local status
 
-  git_remote_pattern="(ssh|git)://([^/@[:space:]]+@)?[[:alnum:].-]+(:[[:digit:]]+)?/[^[:space:]<>\"']+|https?://([^/@[:space:]]+@)?[[:alnum:].-]+(:[[:digit:]]+)?/[^[:space:]<>\"']+\\.git([?#][^[:space:]<>\"']*)?|[[:alnum:]_.-]+@[[:alnum:].-]+:[^[:space:]<>\"']+"
+  git_remote_pattern="(ssh|git)://([^/@[:space:]]+@)?[[:alnum:].-]+(:[[:digit:]]+)?/[^[:space:]<>\"']+|https?://([^/@[:space:]]+@)?[[:alnum:].-]+(:[[:digit:]]+)?/[^[:space:]<>\"']+|[[:alnum:]_.-]+@[[:alnum:].-]+:[^[:space:]<>\"']+"
 
   for public_file in "${public_files[@]}"; do
     if matches=$(LC_ALL=C grep -IEo "$git_remote_pattern" -- "$public_file"); then
@@ -139,15 +139,30 @@ require_public_git_hosts() {
     fi
   done
 
-  pass "public files contain only allowlisted Git hosts"
+  pass "public files contain only allowlisted public hosts"
 }
 
 required_files=(
   .gitignore
+  .github/workflows/ci.yml
   LICENSE
+  README.md
+  SECURITY.md
   dependencies.env
   AGENTS.md
   CLAUDE.md
+  docs/multi-repo.md
+  docs/removal.md
+  docs/tools.md
+  docs/workflow.md
+  prompts/README.md
+  prompts/discovery.md
+  prompts/finish.md
+  prompts/implementation.md
+  prompts/multi-repo.md
+  prompts/review.md
+  scripts/check.sh
+  tests/restore_test.sh
   tests/static_test.sh
 )
 
@@ -155,17 +170,49 @@ for required_file in "${required_files[@]}"; do
   require_file "$required_file"
 done
 
-if [[ -x tests/static_test.sh ]]; then
-  pass "tests/static_test.sh is executable"
-else
-  fail "tests/static_test.sh is not executable"
-fi
+required_executables=(
+  install.sh
+  scripts/check.sh
+  scripts/restore.sh
+  tests/install_test.sh
+  tests/restore_test.sh
+  tests/static_test.sh
+)
+
+for required_executable in "${required_executables[@]}"; do
+  if [[ -x $required_executable ]]; then
+    pass "$required_executable is executable"
+  else
+    fail "$required_executable is not executable"
+  fi
+done
 
 if [[ -f CLAUDE.md ]] && grep -Fqx '@AGENTS.md' CLAUDE.md; then
   pass "CLAUDE.md imports AGENTS.md"
 else
   fail "CLAUDE.md must contain an @AGENTS.md import"
 fi
+
+required_readme_text=(
+  './install.sh'
+  './install.sh --full'
+  './install.sh --dry-run'
+  './scripts/restore.sh latest'
+  'https://github.com/doyled-it/claude-skills'
+  'https://github.com/obra/superpowers'
+  'https://github.com/colbymchenry/codegraph'
+  'docs/workflow.md'
+  'docs/multi-repo.md'
+  'prompts/README.md'
+)
+
+for required_text in "${required_readme_text[@]}"; do
+  if [[ -f README.md ]] && grep -Fq -- "$required_text" README.md; then
+    pass "README.md contains $required_text"
+  else
+    fail "README.md is missing $required_text"
+  fi
+done
 
 required_headings=(
   '## Repository state'
