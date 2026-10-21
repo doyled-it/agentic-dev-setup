@@ -29,7 +29,7 @@ Each plugin is installed through the native Claude Code or Codex plugin manager.
 
 ## Extended plugin tier
 
-`./install.sh --full` adds the selected extended set from Anthropic's official marketplace:
+`./install.sh --full` adds these 10 plugins from Anthropic's official marketplace to Claude Code:
 
 ```text
 code-review
@@ -37,8 +37,6 @@ code-simplifier
 claude-md-management
 claude-security
 frontend-design
-context7
-playwright
 plugin-dev
 skill-creator
 mcp-server-dev
@@ -46,9 +44,38 @@ pyright-lsp
 typescript-lsp
 ```
 
-These selected plugins come from Anthropic's official marketplace, which includes both Anthropic and third-party packages. They cover specialist review, documentation maintenance, security, frontend work, browser automation, plugin authoring, MCP development, and language intelligence. Their names and availability may change independently of this repository. OpenAI documents its compatible [marketplace commands and package format](https://developers.openai.com/plugins/build/plugins).
+Codex receives the same set except `claude-security`, which requires Claude Code's Workflow tool. Including the four core plugins, full setup installs 14 native plugins in Claude Code and 13 in Codex. The default core tier is unchanged.
 
-Installation and authentication are separate. In live validation, Context7 installed successfully but its MCP endpoint requested OAuth before use. Language-service plugins also need their language-server binaries, and browser automation may need browser downloads. Review each selected plugin's setup requirements. The core tier avoids making unrelated services prerequisites for a development session.
+The official marketplace includes both Anthropic and third-party packages. The selected plugins cover review, documentation, security, frontend work, plugin authoring, MCP development, and language intelligence. Their availability can change independently of this repository. The catalog is [dependencies.env](../dependencies.env).
+
+Full setup removes old `context7` and thin `playwright` plugins from the selected agents. It also removes an old `claude-security` installation from Codex. Claude Security remains installed in Claude Code. Core installation does not perform this migration.
+
+## Full runtime setup
+
+Full setup requires Node.js 22.22.2 or newer and npm. Node.js 24 is recommended for the pinned npm packages. The npm global prefix must be writable, and its `bin` directory must already be on `PATH` and take precedence over conflicting language-server installations. The installer checks effective resolution so restarted agents use the verified binaries. It does not change shell startup files or use `sudo`.
+
+[install-full-runtime.sh](../scripts/install-full-runtime.sh) installs these pinned npm packages automatically:
+
+| Package | Version |
+| --- | --- |
+| `pyright` | 1.1.414 |
+| `typescript-language-server` | 6.0.2 |
+| `typescript` | 6.0.3 |
+| `@playwright/mcp` | 0.0.83 |
+
+It downloads the Chromium build matched to that Playwright MCP version. Browser automation uses the official MCP server directly under the name `agentic-playwright`, with headless Chromium and an isolated browser context. It passes `--config` to load `~/.config/agentic-dev-setup/playwright.json`. The companion `runtimes.json` records absolute executable paths and arguments for both language servers and Playwright MCP. A conflicting existing `agentic-playwright` definition is preserved and stops setup with an error.
+
+[ensure-cli-tools.sh](../scripts/ensure-cli-tools.sh) reuses working `gh` and Python 3.9+ commands. When missing, it downloads GitHub CLI 2.102.0 and uses uv to install Python 3.12 into the configured user environment. It downloads uv 0.12.18 when needed. Helper binaries go into the npm prefix's `bin` directory; release archives have SHA256 checks before extraction. These downloads require `curl` and `tar`.
+
+Full setup then verifies JSON-RPC initialization and shutdown for both language servers, and MCP initialization, navigation to a temporary localhost page, returned page text, and browser closure. Failures stop setup with diagnostics. The probes have deadlines and output limits and clean up their processes and localhost server. Repeat them from the checkout with:
+
+```bash
+node scripts/verify-runtimes.cjs "$HOME/.config/agentic-dev-setup/runtimes.json"
+```
+
+Successful probes print `PASS pyright`, `PASS typescript`, and `PASS playwright`. They need no account login or model requests. The installer does not perform account authentication or install OS packages. Linux browser libraries may need administrator installation if Chromium cannot launch.
+
+Project-specific authoring toolchains and SDKs, PyYAML, jq, and `timeout` are not universal full-install dependencies. Install them when a task or tool needs them. The separate live validation runner requires jq.
 
 ## CodeGraph
 

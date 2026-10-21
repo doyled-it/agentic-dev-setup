@@ -18,11 +18,39 @@ Run a real installation with the installed Claude Code, Codex, CodeGraph, Node.j
 ./scripts/validate-live.sh --full --keep
 ```
 
-The live runner uses a temporary home directory whose name contains spaces. It clears inherited credentials and agent configuration, sets a separate npm prefix, disables telemetry, and makes no model requests. It downloads public plugins through each agent's native manager. `--keep` retains synthetic configuration and logs for inspection; otherwise it removes them on exit.
+The live runner uses a temporary home directory whose name contains spaces. It clears inherited credentials and agent configuration, sets a separate npm prefix, disables telemetry, and makes no model requests. The fresh `HOME` isolates Claude configuration without overriding `CLAUDE_CONFIG_DIR`, so native MCP registration and CodeGraph share `~/.claude.json`. It downloads public plugins through each agent's native manager. `--keep` retains synthetic configuration and logs for inspection; otherwise it removes them on exit.
 
 The runner verifies every requested plugin is enabled, CodeGraph MCP registration exists in both agents, and Codex multi-agent support is persisted. It checks the canonical instructions, Claude import, and Codex managed block; repeats the installation without creating another instruction backup; indexes and queries a Python function; and restores all three original instruction files byte for byte. The live runner is opt-in because it uses the network. CI runs its preflight and environment-isolation guard tests.
 
-## Recorded run
+Full validation requires Node.js 22.22.2 or newer. Full installation downloads the language servers, official Playwright MCP and matching Chromium, plus missing GitHub CLI and Python helpers. Its automatic runtime probes require both LSPs to return initialization capabilities and shut down, and Playwright MCP to navigate to a localhost page, return its unique text, and close the browser. The server starts with `--config` pointing at the generated browser JSON. Successful probes print one `PASS` line per runtime.
+
+To repeat the functional probes against an installed full setup, run from the checkout:
+
+```bash
+node scripts/verify-runtimes.cjs "$HOME/.config/agentic-dev-setup/runtimes.json"
+```
+
+These probes have bounded runtime and output and clean up spawned processes and the temporary HTTP server. They make no external page requests or model requests. They do not validate account authentication, project-specific authoring toolchains, or SDKs. jq is a live-runner prerequisite; jq, PyYAML, and `timeout` are not universal full-install dependencies.
+
+## Full-runtime validation
+
+The revised full installer uses 14 native plugins in Claude Code and 13 in Codex, plus direct `agentic-playwright` MCP registration. Context7 and the thin Playwright plugin are retired; Claude Security is Claude-only because it requires the Workflow tool. These checks ran on October 21, 2026. The earlier 16-plugin observations are preserved separately.
+
+| Check | Status |
+| --- | --- |
+| Fresh-home downloads and repeat installation | Passed the real full runner, including unchanged instruction backups and byte-for-byte restore. |
+| Claude 14-plugin and Codex 13-plugin inventories | Passed against both native managers. |
+| Retired-plugin migration on selected agents | Installed the old plugins into disposable configuration, reran full setup, and verified Context7 and the thin Playwright plugin were removed from both agents, plus Claude Security from Codex. Targeted-agent regression tests also passed. |
+| Pyright and TypeScript LSP initialization and shutdown | Both actual servers passed, including a rerun after review fixes. |
+| Matching Chromium and localhost navigation | The matching browser downloaded automatically and returned the synthetic page marker through the official MCP server. The probe uses a temporary working directory and short socket path. |
+| Direct MCP registration in both agents and shared Claude configuration path | Passed initial installation, repeat installation, and the migration rerun. |
+| Missing helper downloads | With preinstalled helpers excluded from PATH, the real bootstrap downloaded and checksum-verified GitHub CLI and uv, then installed Python 3.12.14. All three executables ran successfully. |
+
+Live checks caught a TypeScript compatibility issue: version 7.0.2 does not ship `lib/tsserver.js`. Pinning the JavaScript-server release 6.0.3 made the actual language-server initialization pass. The Chromium checks also exposed a macOS Unix-socket path limit in the runner's long temporary directory, now handled with a short private probe directory. This Playwright version returns a snapshot file link; the probe verifies the unique page title returned by navigation instead of assuming the body appears inline.
+
+Chromium required running the localhost probe outside the host session's outer process sandbox. No browser-sandbox bypass flag was added. Readiness remains conditional on host process permissions and Linux browser system libraries. The installer fails on an unsuccessful probe. Model-dependent workflows, including Claude Security's Workflow capability, are not established by these startup tests.
+
+## Recorded run before full-runtime setup
 
 Validation date: October 21, 2026. Environment: macOS with Bash 3.2, Claude Code 2.1.306, Codex 0.163.0-alpha.11, CodeGraph 1.6.0, and Superpowers 7.0.0.
 
@@ -61,4 +89,4 @@ Claude imports require a backslash before each space in a path, according to the
 
 Independent review also found that unconditional instruction snapshots rejected symlinked dotfiles even when both instruction updates and CodeGraph registration were disabled. Snapshots now run only when registration can write instructions. A regression test verifies plugin-only installation preserves both the symlinks and their contents.
 
-Context7 required OAuth during model startup. Installing its plugin did not complete authentication. Optional language-server binaries and browser downloads also need their own functional checks; the recorded plugin inventories establish installation and enablement only.
+During that October 21, 2026 run, Context7 required OAuth during model startup. Installing its plugin did not complete authentication. Language-server binaries and browser downloads still needed their own functional checks; those recorded plugin inventories establish installation and enablement only. The revised full setup removes Context7 and performs automatic language-server and browser probes. Its live results remain pending above.
