@@ -2,7 +2,7 @@
 
 set -uo pipefail
 
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit
 
 failures=0
 include_untracked=false
@@ -223,8 +223,14 @@ if [[ -n $file_list ]]; then
 fi
 
 for public_file in "${public_files[@]}"; do
+  public_basename=${public_file##*/}
+  case "$public_basename" in
+    design.md|*-design.md|plan.md|*-plan.md)
+      fail "$public_file is not safe to publish"
+      ;;
+  esac
   case "/$public_file" in
-    */design.md|*/*-design.md|*/plan.md|*/*-plan.md|*/implementation-plan.md|*transcript*|*.jsonl|*/.claude/*|*/.codex/*|*/.agents/*|*/.aws/*)
+    *transcript*|*.jsonl|*/.claude/*|*/.codex/*|*/.agents/*|*/.aws/*)
       fail "$public_file is not safe to publish"
       ;;
   esac
