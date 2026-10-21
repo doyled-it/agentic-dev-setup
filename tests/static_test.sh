@@ -99,7 +99,7 @@ git_remote_host() {
 
 is_public_git_host() {
   case "$1" in
-    github.com|gist.github.com|gitlab.com|bitbucket.org|codeberg.org|git.sr.ht|code.claude.com|developers.openai.com|docs.github.com)
+    github.com|gist.github.com|gitlab.com|bitbucket.org|codeberg.org|git.sr.ht|code.claude.com|developers.openai.com|docs.github.com|127.0.0.1|localhost)
       return 0
       ;;
     *)
@@ -164,6 +164,11 @@ required_files=(
   prompts/review.md
   scripts/check.sh
   scripts/validate-live.sh
+  scripts/install-full-runtime.sh
+  scripts/ensure-cli-tools.sh
+  scripts/verify-runtimes.cjs
+  tests/cli_tools_test.sh
+  tests/runtime_protocol.test.cjs
   tests/live_validation_test.sh
   tests/restore_test.sh
   tests/static_test.sh

@@ -3,6 +3,8 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+REAL_NODE=$(command -v node)
+export REAL_NODE
 SANDBOXES=()
 
 cleanup() {
@@ -60,6 +62,21 @@ for arg in "$@"; do
   arg_number=$((arg_number + 1))
 done
 printf '\n' >>"$MOCK_LOG"
+if [[ ${1-} == plugin && ${2-} == list ]]; then
+  if [[ ${MOCK_RETIRED_PLUGINS:-false} == true ]]; then
+    if [[ $(basename "$0") == claude ]]; then
+      printf '[{"id":"context7@claude-plugins-official"},{"id":"playwright@claude-plugins-official"}]\n'
+    else
+      printf '{"installed":[{"pluginId":"context7@claude-plugins-official","installed":true},{"pluginId":"playwright@claude-plugins-official","installed":true},{"pluginId":"claude-security@claude-plugins-official","installed":true}]}\n'
+    fi
+    exit 0
+  fi
+  if [[ $(basename "$0") == claude ]]; then printf '[]\n'; else printf '{"installed":[]}\n'; fi
+fi
+if [[ ${1-} == mcp && ${2-} == get ]]; then
+  if [[ $(basename "$0") == claude && -f $HOME/claude-existing.txt ]]; then cat "$HOME/claude-existing.txt"; exit 0; fi
+  exit 1
+fi
 exit 0
 MOCK
   chmod +x "$path"
@@ -97,6 +114,61 @@ MOCK
   chmod +x "$TEST_BIN/codegraph"
 }
 
+write_full_runtime_mocks() {
+  write_recording_mock gh
+  cat >"$TEST_BIN/python3" <<'MOCK'
+#!/usr/bin/env bash
+printf 'Python 3.12.0\n'
+MOCK
+  cat >"$TEST_BIN/curl" <<'MOCK'
+#!/usr/bin/env bash
+printf 'unexpected network download in installer unit test\n' >&2
+exit 91
+MOCK
+  chmod +x "$TEST_BIN/python3" "$TEST_BIN/curl"
+  cat >"$TEST_BIN/node" <<'MOCK'
+#!/usr/bin/env bash
+if [[ ${1-} == --version ]]; then printf '%s\n' "${MOCK_NODE_VERSION:-v24.15.0}"; exit 0; fi
+if [[ ${1-} == */verify-runtimes.cjs ]]; then
+  printf 'runtime protocol verification\n' >>"$MOCK_LOG"
+  exit 0
+fi
+exec "$REAL_NODE" "$@"
+MOCK
+  cat >"$TEST_BIN/npm" <<'MOCK'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'npm %s\n' "$*" >>"$MOCK_LOG"
+runtime="$HOME/npm-runtime"
+case "$*" in
+  'prefix -g') printf '%s\n' "$runtime"; exit 0 ;;
+  'root -g') printf '%s/node_modules\n' "$runtime"; exit 0 ;;
+  'list -g --depth=0 --json')
+    if [[ -f $runtime/versions.json ]]; then cat "$runtime/versions.json"; else printf '{}\n'; fi
+    exit 0 ;;
+esac
+[[ ${FAIL_RUNTIME_DOWNLOAD:-false} != true ]] || exit 19
+mkdir -p "$runtime/bin" "$runtime/node_modules/@playwright/mcp"
+for binary in pyright-langserver typescript-language-server; do
+  printf '#!/bin/sh\nexit 0\n' >"$runtime/bin/$binary"
+  chmod +x "$runtime/bin/$binary"
+done
+cat >"$runtime/node_modules/@playwright/mcp/package.json" <<'JSON'
+{"name":"@playwright/mcp","main":"index.js"}
+JSON
+cat >"$runtime/node_modules/@playwright/mcp/index.js" <<'JS'
+module.exports.chromium = { executablePath: () => require('node:path').join(process.env.HOME, 'chromium binary') };
+JS
+mkdir -p "$runtime/node_modules/@playwright/mcp/node_modules/playwright"
+cp "$runtime/node_modules/@playwright/mcp/index.js" "$runtime/node_modules/@playwright/mcp/node_modules/playwright/index.js"
+cat >"$runtime/node_modules/@playwright/mcp/cli.js" <<'JS'
+require('node:fs').writeFileSync(require('node:path').join(process.env.HOME, 'chromium binary'), '', {mode: 0o755});
+JS
+printf '{"dependencies":{"pyright":{"version":"1.1.414"},"typescript-language-server":{"version":"6.0.2"},"typescript":{"version":"6.0.3"},"@playwright/mcp":{"version":"0.0.83"}}}\n' >"$runtime/versions.json"
+MOCK
+  chmod +x "$TEST_BIN/node" "$TEST_BIN/npm"
+}
+
 write_failing_claude_mock() {
   local mode=$1
   local path="$TEST_BIN/claude"
@@ -105,6 +177,7 @@ write_failing_claude_mock() {
 set -euo pipefail
 mode='$mode'
 printf 'claude %s\n' "\$*" >>"\$MOCK_LOG"
+if [[ \$* == 'plugin list --json' ]]; then printf '[]\n'; exit 0; fi
 if [[ \$* == 'plugin marketplace list --json' ]]; then
   case "\$mode" in
     update-fail)
@@ -137,7 +210,7 @@ MOCK
 }
 
 run_install() {
-  env HOME="$TEST_HOME" PATH="$TEST_BIN:/usr/bin:/bin" MOCK_LOG="$MOCK_LOG" \
+  env HOME="$TEST_HOME" PATH="$TEST_BIN:$TEST_HOME/npm-runtime/bin:/usr/bin:/bin" MOCK_LOG="$MOCK_LOG" \
     bash "$ROOT/install.sh" "$@"
 }
 
@@ -335,14 +408,86 @@ scenario_full_installs_exact_official_set_for_both_agents() {
   write_recording_mock codex
   write_recording_mock codegraph
   write_npm_mock
+  write_full_runtime_mocks
   run_install --full >"$TEST_SANDBOX/install.out"
+  if grep -Fq 'plugin install context7@' "$MOCK_LOG" || grep -Fq 'plugin add context7@' "$MOCK_LOG"; then
+    fail 'full installation must not install Context7'
+  fi
   assert_log_contains 'claude plugin marketplace add anthropics/claude-plugins-official'
   assert_log_contains 'codex plugin marketplace add anthropics/claude-plugins-official --ref main'
-  for plugin in code-review code-simplifier claude-md-management claude-security frontend-design context7 playwright plugin-dev skill-creator mcp-server-dev pyright-lsp typescript-lsp; do
+  for plugin in code-review code-simplifier claude-md-management frontend-design plugin-dev skill-creator mcp-server-dev pyright-lsp typescript-lsp; do
     assert_log_contains "claude plugin install $plugin@claude-plugins-official"
     assert_log_contains "codex plugin add $plugin@claude-plugins-official"
   done
+  assert_log_contains 'claude plugin install claude-security@claude-plugins-official'
+  if grep -Fq 'codex plugin add claude-security@' "$MOCK_LOG"; then fail 'Claude Security requires the Claude Workflow tool'; fi
+  assert_log_contains 'npm install -g pyright@1.1.414 typescript-language-server@6.0.2 typescript@6.0.3 @playwright/mcp@0.0.83'
+  assert_log_contains 'runtime protocol verification'
+  assert_log_contains 'claude mcp add --scope user agentic-playwright'
+  assert_log_contains 'codex mcp add agentic-playwright'
+  run_install --full >"$TEST_SANDBOX/second-full.out"
+  [[ $(grep -c '^npm install -g pyright@' "$MOCK_LOG") -eq 1 ]] || fail 'repeat full installation reinstalled matching npm runtimes'
   pass 'full mode installs the selected official-marketplace plugin set'
+}
+
+scenario_full_runtime_failures_are_fatal() {
+  new_sandbox
+  write_recording_mock claude
+  write_recording_mock codex
+  write_recording_mock codegraph
+  write_full_runtime_mocks
+  mkdir -p "$TEST_HOME/.claude"
+  printf 'Preserve original instructions\n' >"$TEST_HOME/.claude/CLAUDE.md"
+  cp "$TEST_HOME/.claude/CLAUDE.md" "$TEST_SANDBOX/original"
+  if MOCK_NODE_VERSION=v20.18.0 run_install --full >"$TEST_SANDBOX/node.out" 2>&1; then fail 'old Node should fail full preflight'; fi
+  [[ ! -s $MOCK_LOG ]] || fail 'Node preflight failure mutated agent state'
+  if FAIL_RUNTIME_DOWNLOAD=true run_install --full >"$TEST_SANDBOX/download.out" 2>&1; then fail 'runtime download failure must fail full installation'; fi
+  cmp -s "$TEST_HOME/.claude/CLAUDE.md" "$TEST_SANDBOX/original" || fail 'runtime failure changed original instructions'
+  [[ $(backup_count) == 0 ]] || fail 'failed runtime setup created an instruction backup'
+  if grep -Fq 'Setup complete' "$TEST_SANDBOX/download.out"; then fail 'runtime failure reported success'; fi
+  pass 'runtime download and Node preflight failures fail without changing instructions'
+}
+
+scenario_full_runtime_rejects_shadowed_tools_and_foreign_mcp() {
+  new_sandbox
+  write_recording_mock claude
+  write_recording_mock codex
+  write_recording_mock codegraph
+  write_full_runtime_mocks
+  write_recording_mock typescript-language-server
+  if run_install --full >"$TEST_SANDBOX/shadow.out" 2>&1; then fail 'PATH-shadowed language server must not pass readiness'; fi
+  rm "$TEST_BIN/typescript-language-server"
+  run_install --full >"$TEST_SANDBOX/initial.out"
+  local mcp="$TEST_HOME/npm-runtime/node_modules/@playwright/mcp/cli.js"
+  local config="$TEST_HOME/.config/agentic-dev-setup/playwright.json"
+  printf 'Command: /removed/node\nArgs: %s --config %s --browser firefox\n' "$mcp" "$config" >"$TEST_HOME/claude-existing.txt"
+  "$REAL_NODE" - "$TEST_HOME/.claude.json" "$mcp" "$config" <<'JS'
+const fs = require('node:fs');
+fs.writeFileSync(process.argv[2], JSON.stringify({mcpServers: {'agentic-playwright': {
+  type: 'stdio', command: '/removed/node', args: [process.argv[3], '--config', process.argv[4], '--browser', 'firefox']
+}}}));
+JS
+  cp "$TEST_HOME/.claude.json" "$TEST_SANDBOX/foreign.before"
+  if run_install --full >"$TEST_SANDBOX/foreign.out" 2>&1; then fail 'conflicting Claude MCP definition must not pass readiness'; fi
+  cmp -s "$TEST_HOME/.claude.json" "$TEST_SANDBOX/foreign.before" || fail 'foreign Claude MCP definition was changed'
+  pass 'shadowed tools and conflicting Claude MCP definitions are rejected'
+}
+
+scenario_full_retires_only_selected_agent_plugins() {
+  new_sandbox
+  write_recording_mock claude
+  write_recording_mock codex
+  write_recording_mock codegraph
+  write_full_runtime_mocks
+  MOCK_RETIRED_PLUGINS=true run_install --full --claude-only >"$TEST_SANDBOX/claude.out"
+  assert_log_contains 'claude plugin uninstall context7@claude-plugins-official'
+  assert_log_contains 'claude plugin uninstall playwright@claude-plugins-official'
+  if grep -Fq 'codex ' "$MOCK_LOG"; then fail 'Claude-only migration changed Codex'; fi
+  : >"$MOCK_LOG"
+  MOCK_RETIRED_PLUGINS=true run_install --full --codex-only >"$TEST_SANDBOX/codex.out"
+  for plugin in context7 playwright claude-security; do assert_log_contains "codex plugin remove $plugin@claude-plugins-official"; done
+  if grep -Fq 'claude ' "$MOCK_LOG"; then fail 'Codex-only migration changed Claude'; fi
+  pass 'full migration retires exact plugin IDs only in selected agents'
 }
 
 scenario_agent_targeting_and_explicit_missing_tool() {
@@ -508,6 +653,7 @@ scenario_marketplace_and_plugin_failures_are_not_masked() {
 
   new_sandbox
   write_failing_claude_mock optional-fail
+  write_full_runtime_mocks
   if run_install --claude-only --skip-codegraph --skip-instructions --full >"$TEST_SANDBOX/install.out" 2>&1; then
     fail 'optional plugin failure should produce a final nonzero exit'
   fi
@@ -523,6 +669,9 @@ scenario_missing_codegraph_requires_npm
 scenario_malformed_markers_fail_without_changes
 scenario_restore_removes_files_that_were_absent
 scenario_full_installs_exact_official_set_for_both_agents
+scenario_full_runtime_failures_are_fatal
+scenario_full_runtime_rejects_shadowed_tools_and_foreign_mcp
+scenario_full_retires_only_selected_agent_plugins
 scenario_agent_targeting_and_explicit_missing_tool
 scenario_opt_outs_skip_requested_components
 scenario_dry_run_makes_no_changes

@@ -121,7 +121,7 @@ for ((i = 0; i < ${#TOOLS[@]}; i++)); do
 done
 
 # Preserve auxiliary tool lookup even if the caller used relative PATH entries.
-RUN_PATH="$WORK_DIR/bin"
+RUN_PATH="$WORK_DIR/bin:$WORK_DIR/npm/bin"
 IFS=: read -r -a path_entries <<<"$CALLER_PATH"
 for entry in "${path_entries[@]}"; do
   case "$entry" in
@@ -139,7 +139,7 @@ RUN_PATH="$RUN_PATH:/usr/bin:/bin"
 # API keys, agent settings, credential helpers, and SSH agents are not passed.
 isolated() {
   env -i HOME="$LIVE_HOME" CODEX_HOME="$LIVE_HOME/.codex" \
-    CLAUDE_CONFIG_DIR="$LIVE_HOME/.claude" PATH="$RUN_PATH" \
+    PATH="$RUN_PATH" \
     TMPDIR="$WORK_DIR/tmp" XDG_CONFIG_HOME="$LIVE_HOME/.config" \
     XDG_CACHE_HOME="$LIVE_HOME/.cache" XDG_DATA_HOME="$LIVE_HOME/.local/share" \
     XDG_STATE_HOME="$LIVE_HOME/.local/state" \
@@ -211,8 +211,17 @@ verify_native_state() {
   done
   if [[ $FULL == true ]]; then
     for plugin in $EXTENDED_MARKETPLACE_PLUGINS; do
-      assert_plugin "$plugin@$OFFICIAL_MARKETPLACE_NAME"
+      if [[ $plugin == claude-security ]]; then
+        # jq expands its own $id variable.
+        # shellcheck disable=SC2016
+        "$JQ_BIN" -e --arg id "$plugin@$OFFICIAL_MARKETPLACE_NAME" 'any(.[]; .id == $id and .enabled == true)' "$LOG_DIR/claude-plugins.json" >/dev/null || die 'Claude Security is missing from Claude'
+      else
+        assert_plugin "$plugin@$OFFICIAL_MARKETPLACE_NAME"
+      fi
     done
+    "$JQ_BIN" -e 'all(.[]; (.id | startswith("context7@")) == false and (.id | startswith("playwright@")) == false)' "$LOG_DIR/claude-plugins.json" >/dev/null || die 'Retired Claude plugins were installed'
+    "$JQ_BIN" -e 'all(.installed[]; (.pluginId | test("^(context7|playwright|claude-security)@")) == false)' "$LOG_DIR/codex-plugins.json" >/dev/null || die 'Retired or unsupported Codex plugins were installed'
+    capture runtime-protocols "${TOOL_PATHS[5]}" "$ROOT/scripts/verify-runtimes.cjs" "$LIVE_HOME/.config/agentic-dev-setup/runtimes.json"
   fi
 
   capture codex-features "$CODEX_BIN" features list
@@ -230,6 +239,10 @@ verify_native_state() {
     "$LOG_DIR/codex-mcp.json" >/dev/null || die 'CodeGraph MCP registration is missing from Codex.'
   "$JQ_BIN" -e '.mcpServers.codegraph | .command == "codegraph" and .args == ["serve", "--mcp"]' \
     "$LIVE_HOME/.claude.json" >/dev/null || die 'CodeGraph MCP registration is missing from Claude configuration.'
+  if [[ $FULL == true ]]; then
+    "$JQ_BIN" -e 'any(.[]; .name == "agentic-playwright" and .transport.type == "stdio")' "$LOG_DIR/codex-mcp.json" >/dev/null || die 'Playwright is missing from Codex MCP configuration'
+    "$JQ_BIN" -e '.mcpServers["agentic-playwright"].args | index("--config") != null' "$LIVE_HOME/.claude.json" >/dev/null || die 'Playwright is missing from Claude MCP configuration'
+  fi
 }
 
 printf '# Existing canonical preferences\n\nKeep this original in the backup.\n' >"$WORK_DIR/originals/canonical"

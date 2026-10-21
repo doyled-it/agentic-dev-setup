@@ -15,11 +15,13 @@ cd agentic-dev-setup
 
 Restart active Claude Code and Codex sessions after installation.
 
-The default install adds the core workflow. To mirror the broader plugin set I use:
+The default install adds the core workflow. To install the full toolset and its runtimes:
 
 ```bash
 ./install.sh --full
 ```
+
+Full setup installs 14 native plugins in Claude Code and 13 in Codex, plus the official Playwright MCP server as `agentic-playwright`. It downloads pinned language servers and matching Chromium, supplies missing GitHub CLI and Python helpers, and verifies both language servers and browser navigation automatically. Context7 is excluded. See [full setup details](docs/tools.md#extended-plugin-tier) and the additional requirements below.
 
 ## What the default installs
 
@@ -38,7 +40,7 @@ The global instructions explicitly invoke `development-loop`, `using-codegraph`,
 
 | Option | Effect |
 | --- | --- |
-| `--full` | Add the selected extended plugins from Anthropic's official marketplace. |
+| `--full` | Add the selected official plugins, download their runtimes, register Playwright MCP, and verify language servers and browser navigation. |
 | `--claude-only` | Configure Claude Code and fail if its CLI is missing. |
 | `--codex-only` | Configure Codex and fail if its CLI is missing. |
 | `--skip-codegraph` | Leave the CodeGraph CLI and agent registration alone. |
@@ -69,7 +71,7 @@ Restore the most recent instruction state with:
 ./scripts/restore.sh latest
 ```
 
-The restore script only reverts instruction files managed by the selected transaction. Plugin installations, marketplace entries, Codex multi-agent support, and CodeGraph registration use native removal commands documented in [docs/removal.md](docs/removal.md).
+The restore script only reverts instruction files managed by the selected transaction. Plugins, marketplace entries, runtime downloads and configuration, Codex multi-agent support, and MCP registrations have separate [removal instructions](docs/removal.md).
 
 ## Requirements
 
@@ -78,6 +80,8 @@ The restore script only reverts instruction files managed by the selected transa
 - Claude Code, Codex, or both.
 - `npm` when CodeGraph is absent and must be installed by the script.
 - Network access to the public marketplaces and package registry during installation.
+
+Full setup also requires Node.js 22.22.2 or newer, npm, and a writable npm global prefix whose `bin` directory is already on `PATH`. Downloads also use public release and browser hosts. Missing helper downloads require `curl` and `tar`. Existing working `gh` and Python 3.9+ are reused; otherwise the installer downloads them without `sudo`. It does not install OS packages or log into accounts. On Linux, a failed Chromium launch may require an administrator to install browser system libraries.
 
 The development workstation used Claude Code 2.1.306, Codex 0.163.0-alpha.11, and CodeGraph 1.6.0 when this repository was created. Local automated tests use recording mocks to verify command construction, file behavior, failure handling, and rollback. A separate [live validation runner and dated results](docs/validation.md) cover native marketplace installs, indexing, repeat installation, restore, and fresh-agent tasks. Plugin and CLI interfaces can change, so rerun the relevant checks after updating dependency pins or command syntax.
 
@@ -115,4 +119,12 @@ Validate a real installation in disposable configuration, without model requests
 ./scripts/validate-live.sh --full
 ```
 
-The checks exercise the installer in temporary home directories, lint every shell script, scan tracked and nonignored untracked files with a limited public-safety pattern set, and reject generated planning documents from the publishable tree.
+Repeat only the installed language-server and browser checks from this checkout with:
+
+```bash
+node scripts/verify-runtimes.cjs "$HOME/.config/agentic-dev-setup/runtimes.json"
+```
+
+These checks use a temporary localhost page and make no model requests. The dated validation record distinguishes earlier plugin inventories from the completed full-runtime checks.
+
+The local checks exercise the installer in temporary home directories, lint every shell script, scan tracked and nonignored untracked files with a limited public-safety pattern set, and reject generated planning documents from the publishable tree.

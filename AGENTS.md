@@ -60,6 +60,7 @@ Invocation means loading the skill through the host's skill tool or reading its 
 ## Verification
 
 - Run the focused tests, the relevant full suite, and the repository lint or static checks.
+- Verify executable dependencies and server startup when changing setup steps; a plugin inventory alone does not establish that a tool works.
 - Use a maintained secret scanner before publication; the custom static test provides supplemental repository-specific checks.
 - Read the command output and confirm exit status before making a completion claim.
 - Inspect the final diff for accidental files, private data, and unrelated changes.
