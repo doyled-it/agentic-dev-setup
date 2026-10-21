@@ -304,10 +304,12 @@ files_differ() {
 prepare_instructions() {
   local claude_block="$WORK_DIR/claude.block"
   local codex_block="$WORK_DIR/codex.block"
+  local claude_import_path
+  claude_import_path=${CANONICAL_FILE// /\\ }
 
   {
     printf '%s\n' "$BEGIN_MARKER"
-    printf '@%s\n' "$CANONICAL_FILE"
+    printf '@%s\n' "$claude_import_path"
     printf '%s\n' "$END_MARKER"
   } >"$claude_block"
 

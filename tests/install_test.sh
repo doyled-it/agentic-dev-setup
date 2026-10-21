@@ -208,7 +208,7 @@ scenario_core_install_is_native_reversible_and_idempotent() {
   cmp -s "$ROOT/AGENTS.md" "$canonical_file" || fail 'canonical AGENTS.md copy differs'
   assert_file_contains "$claude_file" 'keep claude'
   assert_file_contains "$claude_file" '<!-- BEGIN agentic-dev-setup -->'
-  assert_file_contains "$claude_file" "@$canonical_file"
+  assert_file_contains "$claude_file" "@$TEST_SANDBOX/home\\ with\\ spaces/.config/agentic-dev-setup/AGENTS.md"
   assert_file_contains "$codex_file" 'keep codex'
   assert_file_contains "$codex_file" '<!-- BEGIN agentic-dev-setup -->'
   assert_file_contains "$codex_file" '# Agent Instructions'
