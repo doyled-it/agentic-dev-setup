@@ -125,6 +125,6 @@ Repeat only the installed language-server and browser checks from this checkout 
 node scripts/verify-runtimes.cjs "$HOME/.config/agentic-dev-setup/runtimes.json"
 ```
 
-These checks use a temporary localhost page and make no model requests. The dated validation record distinguishes earlier plugin inventories from the new full-runtime checks awaiting a live run.
+These checks use a temporary localhost page and make no model requests. The dated validation record distinguishes earlier plugin inventories from the completed full-runtime checks.
 
 The local checks exercise the installer in temporary home directories, lint every shell script, scan tracked and nonignored untracked files with a limited public-safety pattern set, and reject generated planning documents from the publishable tree.
