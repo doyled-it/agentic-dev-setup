@@ -95,7 +95,7 @@ if [[ \$* == 'plugin marketplace list --json' ]]; then
       printf '%s\n' '[{"name":"superpowers-marketplace","repo":"obra/superpowers-marketplace"}]'
       ;;
     mismatch)
-      printf '%s\n' '[{"name":"superpowers-marketplace","repo":"example/wrong-source"}]'
+      printf '%s\n' '[{"name":"superpowers-marketplace","repo":"example/wrong-source"},{"name":"other","repo":"obra/superpowers-marketplace"}]'
       ;;
     *)
       printf '%s\n' '[]'
@@ -319,7 +319,7 @@ scenario_full_installs_exact_official_set_for_both_agents() {
     assert_log_contains "claude plugin install $plugin@claude-plugins-official"
     assert_log_contains "codex plugin add $plugin@claude-plugins-official"
   done
-  pass 'full mode installs the documented official plugin set'
+  pass 'full mode installs the selected official-marketplace plugin set'
 }
 
 scenario_agent_targeting_and_explicit_missing_tool() {

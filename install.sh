@@ -341,7 +341,7 @@ marketplace_status() {
   local file=$1
   local name=$2
   local source=$3
-  awk -v wanted_name="$name" -v wanted_source="$source" '
+  tr '{' '\n' <"$file" | awk -v wanted_name="$name" -v wanted_source="$source" '
     BEGIN {
       in_target=0
       found=0
@@ -366,7 +366,7 @@ marketplace_status() {
       else if (matched) print "match"
       else print "mismatch"
     }
-  ' "$file"
+  '
 }
 
 claude_marketplace() {
