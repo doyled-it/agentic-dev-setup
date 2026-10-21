@@ -10,7 +10,7 @@
 ## CodeGraph
 
 - Invoke `codegraph:using-codegraph` (skill name `using-codegraph`) before repository code discovery.
-- Close index gaps: when `.codegraph/` is missing, run `codegraph init . --yes` at that repository's root; otherwise run `codegraph sync .` before querying.
+- Close index gaps: when `.codegraph/` is missing, run `codegraph init . --yes` at that repository's root. Run `codegraph sync .` before querying, including after initialization.
 - Confirm the index targets the checkout being edited, including each worktree and sibling repository.
 - Use graph queries to locate symbols, callers, callees, and change impact.
 - Check impact before editing a symbol and sync again after structural changes.
@@ -31,6 +31,7 @@ For meaningful features and bug fixes, follow this sequence:
 
 Small documentation, spelling, and configuration corrections may use a shorter path when they do not change behavior.
 Use the installed skill's documented name when a host exposes a different namespace. If a skill is unavailable, disclose that and perform its phase directly.
+Invocation means loading the skill through the host's skill tool or reading its `SKILL.md` when no loader exists. Mentioning a skill in a plan or final message is insufficient.
 
 ## Test-driven development
 

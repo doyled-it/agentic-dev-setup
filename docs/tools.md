@@ -74,7 +74,7 @@ The versions in `dependencies.env` record the development workstation when this 
 | Codex | 0.163.0-alpha.11 |
 | CodeGraph | 1.6.0 |
 
-The automated suite uses recording mocks, so these values are environment context rather than a live compatibility matrix. Run `./scripts/check.sh` and a dry run after changing a pin, marketplace source, plugin name, or CLI command.
+The local suite uses recording mocks. The separate [live validation runner and dated results](validation.md) document actual installations and fresh-agent tasks on these versions. They provide a tested environment rather than a compatibility guarantee. Rerun the relevant checks after changing a pin, marketplace source, plugin name, or CLI command.
 
 ## Updating the setup
 

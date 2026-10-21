@@ -79,7 +79,7 @@ The restore script only reverts instruction files managed by the selected transa
 - `npm` when CodeGraph is absent and must be installed by the script.
 - Network access to the public marketplaces and package registry during installation.
 
-The development workstation used Claude Code 2.1.306, Codex 0.163.0-alpha.11, and CodeGraph 1.6.0 when this repository was created. Automated tests use recording mocks to verify command construction, file behavior, failure handling, and rollback. They do not perform live marketplace installs. Plugin and CLI interfaces can change, so run `./scripts/check.sh` and a dry run after updating dependency pins or command syntax.
+The development workstation used Claude Code 2.1.306, Codex 0.163.0-alpha.11, and CodeGraph 1.6.0 when this repository was created. Local automated tests use recording mocks to verify command construction, file behavior, failure handling, and rollback. A separate [live validation runner and dated results](docs/validation.md) cover native marketplace installs, indexing, repeat installation, restore, and fresh-agent tasks. Plugin and CLI interfaces can change, so rerun the relevant checks after updating dependency pins or command syntax.
 
 ## How the workflow fits together
 
@@ -106,6 +106,13 @@ Run all local checks with:
 
 ```bash
 ./scripts/check.sh
+```
+
+Validate a real installation in disposable configuration, without model requests or copied credentials:
+
+```bash
+./scripts/validate-live.sh --dry-run
+./scripts/validate-live.sh --full
 ```
 
 The checks exercise the installer in temporary home directories, lint every shell script, scan tracked and nonignored untracked files with a limited public-safety pattern set, and reject generated planning documents from the publishable tree.

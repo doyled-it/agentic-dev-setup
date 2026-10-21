@@ -155,6 +155,7 @@ required_files=(
   docs/removal.md
   docs/tools.md
   docs/workflow.md
+  docs/validation.md
   prompts/README.md
   prompts/discovery.md
   prompts/finish.md
@@ -162,6 +163,8 @@ required_files=(
   prompts/multi-repo.md
   prompts/review.md
   scripts/check.sh
+  scripts/validate-live.sh
+  tests/live_validation_test.sh
   tests/restore_test.sh
   tests/static_test.sh
 )
@@ -173,10 +176,12 @@ done
 required_executables=(
   install.sh
   scripts/check.sh
+  scripts/validate-live.sh
   scripts/restore.sh
   tests/install_test.sh
   tests/restore_test.sh
   tests/static_test.sh
+  tests/live_validation_test.sh
 )
 
 for required_executable in "${required_executables[@]}"; do
