@@ -386,6 +386,17 @@ scenario_opt_outs_skip_requested_components() {
   assert_path_absent "$TEST_HOME/.config/agentic-dev-setup/AGENTS.md"
   assert_path_absent "$TEST_HOME/.claude/CLAUDE.md"
   assert_path_absent "$TEST_HOME/.codex/AGENTS.md"
+
+  mkdir -p "$TEST_HOME/.claude" "$TEST_HOME/.codex"
+  printf 'Dotfile-managed instructions\n' >"$TEST_SANDBOX/shared-instructions"
+  ln -s "$TEST_SANDBOX/shared-instructions" "$TEST_HOME/.claude/CLAUDE.md"
+  ln -s "$TEST_SANDBOX/shared-instructions" "$TEST_HOME/.codex/AGENTS.md"
+  : >"$MOCK_LOG"
+  run_install --skip-codegraph --skip-instructions --no-multi-agent >"$TEST_SANDBOX/symlink-opt-out.out"
+  [[ -L $TEST_HOME/.claude/CLAUDE.md && -L $TEST_HOME/.codex/AGENTS.md ]] || fail 'plugin-only install replaced instruction symlinks'
+  [[ $(cat "$TEST_SANDBOX/shared-instructions") == 'Dotfile-managed instructions' ]] || fail 'plugin-only install changed symlink targets'
+  assert_log_contains 'claude plugin install development-loop@doyled-it-skills -y'
+  assert_log_contains 'codex plugin add development-loop@doyled-it-skills'
   pass 'opt-out flags skip their components'
 }
 

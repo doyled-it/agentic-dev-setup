@@ -614,7 +614,9 @@ if [[ $DRY_RUN == true ]]; then
   exit 0
 fi
 validate_explicit_targets
-snapshot_instructions
+if [[ $SKIP_CODEGRAPH == false ]]; then
+  snapshot_instructions
+fi
 if [[ $SKIP_INSTRUCTIONS == false ]]; then
   prepare_instructions
 fi
