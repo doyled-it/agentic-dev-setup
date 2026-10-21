@@ -77,7 +77,7 @@ MOCK
 
 run_install() {
   env HOME="$TEST_HOME" PATH="$TEST_BIN:/usr/bin:/bin" MOCK_LOG="$MOCK_LOG" \
-    bash "$ROOT/install.sh"
+    bash "$ROOT/install.sh" "$@"
 }
 
 backup_count() {
@@ -219,10 +219,113 @@ scenario_restore_removes_files_that_were_absent() {
   pass 'restore removes files that were originally absent'
 }
 
+scenario_full_installs_exact_official_set_for_both_agents() {
+  local plugin
+  new_sandbox
+  write_recording_mock claude
+  write_recording_mock codex
+  write_recording_mock codegraph
+  write_npm_mock
+  run_install --full >"$TEST_SANDBOX/install.out"
+  assert_log_contains 'claude plugin marketplace add anthropics/claude-plugins-official'
+  assert_log_contains 'codex plugin marketplace add anthropics/claude-plugins-official --ref main'
+  for plugin in code-review code-simplifier claude-md-management claude-security frontend-design context7 playwright plugin-dev skill-creator mcp-server-dev pyright-lsp typescript-lsp; do
+    assert_log_contains "claude plugin install $plugin@claude-plugins-official"
+    assert_log_contains "codex plugin add $plugin@claude-plugins-official"
+  done
+  pass 'full mode installs the documented official plugin set'
+}
+
+scenario_agent_targeting_and_explicit_missing_tool() {
+  new_sandbox
+  write_recording_mock claude
+  write_recording_mock codex
+  write_recording_mock codegraph
+  write_npm_mock
+  run_install --claude-only >"$TEST_SANDBOX/install.out"
+  if grep -Fq 'codex ' "$MOCK_LOG"; then
+    fail 'Claude-only mode invoked Codex'
+  fi
+  assert_path_absent "$TEST_HOME/.codex/AGENTS.md"
+
+  new_sandbox
+  write_recording_mock claude
+  write_recording_mock codegraph
+  write_npm_mock
+  if run_install --codex-only >"$TEST_SANDBOX/install.out" 2>&1; then
+    fail 'explicit Codex target should fail when Codex is missing'
+  fi
+  assert_file_contains "$TEST_SANDBOX/install.out" 'Codex CLI is required by --codex-only'
+  assert_path_absent "$TEST_HOME/.config/agentic-dev-setup/AGENTS.md"
+  pass 'agent targeting is selective and explicit missing tools are fatal'
+}
+
+scenario_opt_outs_skip_requested_components() {
+  new_sandbox
+  write_recording_mock claude
+  write_recording_mock codex
+  write_recording_mock codegraph
+  write_npm_mock
+  run_install --skip-codegraph --skip-instructions --no-multi-agent >"$TEST_SANDBOX/install.out"
+  if grep -Fq 'codegraph ' "$MOCK_LOG"; then
+    fail 'skip-codegraph invoked CodeGraph'
+  fi
+  if grep -Fq 'codex features enable multi_agent' "$MOCK_LOG"; then
+    fail 'no-multi-agent enabled Codex multi-agent support'
+  fi
+  assert_path_absent "$TEST_HOME/.config/agentic-dev-setup/AGENTS.md"
+  assert_path_absent "$TEST_HOME/.claude/CLAUDE.md"
+  assert_path_absent "$TEST_HOME/.codex/AGENTS.md"
+  pass 'opt-out flags skip their components'
+}
+
+scenario_dry_run_makes_no_changes() {
+  new_sandbox
+  run_install --full --dry-run >"$TEST_SANDBOX/install.out"
+  [[ ! -s $MOCK_LOG ]] || fail 'dry-run invoked an external command'
+  assert_path_absent "$TEST_HOME/.config/agentic-dev-setup"
+  assert_path_absent "$TEST_HOME/.claude/CLAUDE.md"
+  assert_path_absent "$TEST_HOME/.codex/AGENTS.md"
+  assert_file_contains "$TEST_SANDBOX/install.out" 'Would install core plugins'
+  assert_file_contains "$TEST_SANDBOX/install.out" 'Would install the full official plugin set'
+  pass 'dry-run reports work without changing the system'
+}
+
+scenario_explicit_index_initializes_then_syncs_path_with_spaces() {
+  local project="$TEST_SANDBOX/project with spaces"
+  new_sandbox
+  write_recording_mock claude
+  write_recording_mock codex
+  write_recording_mock codegraph
+  write_npm_mock
+  mkdir -p "$project"
+  run_install --index "$project" >"$TEST_SANDBOX/install.out"
+  assert_log_contains "codegraph init $project"
+  mkdir -p "$project/.codegraph"
+  : >"$MOCK_LOG"
+  run_install --index "$project" >"$TEST_SANDBOX/install.second.out"
+  assert_log_contains "codegraph sync $project"
+  pass 'explicit indexing initializes and syncs paths with spaces'
+}
+
+scenario_help_is_available() {
+  new_sandbox
+  run_install --help >"$TEST_SANDBOX/help.out"
+  assert_file_contains "$TEST_SANDBOX/help.out" 'Usage:'
+  assert_file_contains "$TEST_SANDBOX/help.out" '--index PATH'
+  pass 'help documents installer modes'
+}
+
 scenario_core_install_is_native_reversible_and_idempotent
 scenario_missing_codex_warns_and_continues
 scenario_missing_codegraph_installs_known_good_package
 scenario_malformed_markers_fail_without_changes
 scenario_restore_removes_files_that_were_absent
+scenario_full_installs_exact_official_set_for_both_agents
+scenario_agent_targeting_and_explicit_missing_tool
+scenario_opt_outs_skip_requested_components
+scenario_dry_run_makes_no_changes
+scenario_explicit_index_initializes_then_syncs_path_with_spaces
+scenario_help_is_available
 
 printf '\nAll installer tests passed\n'

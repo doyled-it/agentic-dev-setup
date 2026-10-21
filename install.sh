@@ -15,6 +15,18 @@ CLAUDE_FILE="$HOME/.claude/CLAUDE.md"
 CODEX_FILE="$HOME/.codex/AGENTS.md"
 WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/agentic-dev-setup.XXXXXX")
 INSTRUCTIONS_CHANGED=false
+INSTALL_CLAUDE=true
+INSTALL_CODEX=true
+CLAUDE_EXPLICIT=false
+CODEX_EXPLICIT=false
+FULL_INSTALL=false
+SKIP_CODEGRAPH=false
+SKIP_INSTRUCTIONS=false
+ENABLE_MULTI_AGENT=true
+DRY_RUN=false
+FULL_FAILURES=0
+INDEX_PATHS=('')
+INDEX_COUNT=0
 
 cleanup() {
   rm -rf -- "$WORK_DIR"
@@ -32,6 +44,119 @@ warn() {
 die() {
   printf 'error: %s\n' "$*" >&2
   exit 1
+}
+
+usage() {
+  cat <<'EOF'
+Usage: ./install.sh [OPTIONS]
+
+Install the shared agent instructions, core workflow plugins, and CodeGraph.
+
+Options:
+  --full               Also install the documented official plugin set
+  --claude-only        Configure Claude Code only
+  --codex-only         Configure Codex only
+  --skip-codegraph     Do not install or configure CodeGraph
+  --skip-instructions  Do not update global instruction files
+  --no-multi-agent     Do not enable Codex multi-agent support
+  --dry-run            Report intended actions without making changes
+  --index PATH         Initialize or sync a repository after setup; repeatable
+  -h, --help           Show this help
+EOF
+}
+
+parse_args() {
+  local target_mode='both'
+
+  while (($# > 0)); do
+    case "$1" in
+      --full)
+        FULL_INSTALL=true
+        ;;
+      --claude-only)
+        [[ $target_mode != codex ]] || die '--claude-only and --codex-only cannot be combined'
+        target_mode=claude
+        INSTALL_CLAUDE=true
+        INSTALL_CODEX=false
+        CLAUDE_EXPLICIT=true
+        ;;
+      --codex-only)
+        [[ $target_mode != claude ]] || die '--claude-only and --codex-only cannot be combined'
+        target_mode=codex
+        INSTALL_CLAUDE=false
+        INSTALL_CODEX=true
+        CODEX_EXPLICIT=true
+        ;;
+      --skip-codegraph)
+        SKIP_CODEGRAPH=true
+        ;;
+      --skip-instructions)
+        SKIP_INSTRUCTIONS=true
+        ;;
+      --no-multi-agent)
+        ENABLE_MULTI_AGENT=false
+        ;;
+      --dry-run)
+        DRY_RUN=true
+        ;;
+      --index)
+        shift
+        (($# > 0)) || die '--index requires a path'
+        INDEX_PATHS[INDEX_COUNT]=$1
+        INDEX_COUNT=$((INDEX_COUNT + 1))
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        die "unknown option: $1"
+        ;;
+    esac
+    shift
+  done
+
+  if [[ $SKIP_CODEGRAPH == true && $INDEX_COUNT -gt 0 ]]; then
+    die '--skip-codegraph cannot be combined with --index'
+  fi
+}
+
+validate_explicit_targets() {
+  if [[ $CLAUDE_EXPLICIT == true ]] && ! command -v claude >/dev/null 2>&1; then
+    die 'Claude Code CLI is required by --claude-only'
+  fi
+  if [[ $CODEX_EXPLICIT == true ]] && ! command -v codex >/dev/null 2>&1; then
+    die 'Codex CLI is required by --codex-only'
+  fi
+}
+
+describe_dry_run() {
+  local index_number
+  local index_path
+  local targets='Claude Code and Codex'
+  if [[ $INSTALL_CODEX == false ]]; then
+    targets='Claude Code'
+  elif [[ $INSTALL_CLAUDE == false ]]; then
+    targets='Codex'
+  fi
+
+  say "Would install core plugins for $targets"
+  if [[ $FULL_INSTALL == true ]]; then
+    say "Would install the full official plugin set for $targets"
+  fi
+  if [[ $SKIP_CODEGRAPH == false ]]; then
+    say 'Would install and configure CodeGraph'
+  fi
+  if [[ $SKIP_INSTRUCTIONS == false ]]; then
+    say "Would update managed global instructions for $targets"
+  fi
+  if [[ $INSTALL_CODEX == true && $ENABLE_MULTI_AGENT == true ]]; then
+    say 'Would enable Codex multi-agent support'
+  fi
+  for ((index_number = 0; index_number < INDEX_COUNT; index_number++)); do
+    index_path=${INDEX_PATHS[$index_number]}
+    say "Would initialize or sync the CodeGraph index at $index_path"
+  done
 }
 
 count_marker() {
@@ -108,12 +233,20 @@ prepare_instructions() {
   } >"$codex_block"
 
   cp -- "$ROOT/AGENTS.md" "$WORK_DIR/canonical.desired"
-  render_managed_file "$CLAUDE_FILE" "$claude_block" "$WORK_DIR/claude.desired"
-  render_managed_file "$CODEX_FILE" "$codex_block" "$WORK_DIR/codex.desired"
+  if [[ $INSTALL_CLAUDE == true ]]; then
+    render_managed_file "$CLAUDE_FILE" "$claude_block" "$WORK_DIR/claude.desired"
+  fi
+  if [[ $INSTALL_CODEX == true ]]; then
+    render_managed_file "$CODEX_FILE" "$codex_block" "$WORK_DIR/codex.desired"
+  fi
 
-  if files_differ "$WORK_DIR/canonical.desired" "$CANONICAL_FILE" ||
-    files_differ "$WORK_DIR/claude.desired" "$CLAUDE_FILE" ||
-    files_differ "$WORK_DIR/codex.desired" "$CODEX_FILE"; then
+  if files_differ "$WORK_DIR/canonical.desired" "$CANONICAL_FILE"; then
+    INSTRUCTIONS_CHANGED=true
+  fi
+  if [[ $INSTALL_CLAUDE == true ]] && files_differ "$WORK_DIR/claude.desired" "$CLAUDE_FILE"; then
+    INSTRUCTIONS_CHANGED=true
+  fi
+  if [[ $INSTALL_CODEX == true ]] && files_differ "$WORK_DIR/codex.desired" "$CODEX_FILE"; then
     INSTRUCTIONS_CHANGED=true
   fi
 }
@@ -147,14 +280,26 @@ apply_instructions() {
   mkdir -p -- "$transaction"
   : >"$transaction/manifest"
   backup_target "$transaction" canonical "$CANONICAL_FILE" canonical.AGENTS.md
-  backup_target "$transaction" claude "$CLAUDE_FILE" claude.CLAUDE.md
-  backup_target "$transaction" codex "$CODEX_FILE" codex.AGENTS.md
+  if [[ $INSTALL_CLAUDE == true ]]; then
+    backup_target "$transaction" claude "$CLAUDE_FILE" claude.CLAUDE.md
+  fi
+  if [[ $INSTALL_CODEX == true ]]; then
+    backup_target "$transaction" codex "$CODEX_FILE" codex.AGENTS.md
+  fi
 
-  mkdir -p -- "$(dirname "$CANONICAL_FILE")" "$(dirname "$CLAUDE_FILE")" "$(dirname "$CODEX_FILE")"
+  mkdir -p -- "$(dirname "$CANONICAL_FILE")"
   cp -- "$WORK_DIR/canonical.desired" "$CANONICAL_FILE"
-  cp -- "$WORK_DIR/claude.desired" "$CLAUDE_FILE"
-  cp -- "$WORK_DIR/codex.desired" "$CODEX_FILE"
-  chmod 0644 "$CANONICAL_FILE" "$CLAUDE_FILE" "$CODEX_FILE"
+  chmod 0644 "$CANONICAL_FILE"
+  if [[ $INSTALL_CLAUDE == true ]]; then
+    mkdir -p -- "$(dirname "$CLAUDE_FILE")"
+    cp -- "$WORK_DIR/claude.desired" "$CLAUDE_FILE"
+    chmod 0644 "$CLAUDE_FILE"
+  fi
+  if [[ $INSTALL_CODEX == true ]]; then
+    mkdir -p -- "$(dirname "$CODEX_FILE")"
+    cp -- "$WORK_DIR/codex.desired" "$CODEX_FILE"
+    chmod 0644 "$CODEX_FILE"
+  fi
   say "Updated global instructions (backup: $transaction)"
 }
 
@@ -190,6 +335,22 @@ install_claude_core() {
   done
 }
 
+install_claude_full() {
+  local plugin
+  say 'Installing full Claude Code plugin set'
+  if ! claude_marketplace "$OFFICIAL_MARKETPLACE" "$OFFICIAL_MARKETPLACE_NAME"; then
+    warn "could not configure $OFFICIAL_MARKETPLACE_NAME for Claude Code"
+    FULL_FAILURES=$((FULL_FAILURES + 1))
+    return
+  fi
+  for plugin in $FULL_OFFICIAL_PLUGINS; do
+    if ! claude plugin install "$plugin@$OFFICIAL_MARKETPLACE_NAME" -y >/dev/null; then
+      warn "could not install $plugin for Claude Code"
+      FULL_FAILURES=$((FULL_FAILURES + 1))
+    fi
+  done
+}
+
 install_codex_core() {
   local plugin
   if ! command -v codex >/dev/null 2>&1; then
@@ -206,7 +367,25 @@ install_codex_core() {
   for plugin in $CORE_WORKFLOW_PLUGINS; do
     codex plugin add "$plugin@$WORKFLOW_MARKETPLACE_NAME" >/dev/null
   done
-  codex features enable multi_agent >/dev/null
+  if [[ $ENABLE_MULTI_AGENT == true ]]; then
+    codex features enable multi_agent >/dev/null
+  fi
+}
+
+install_codex_full() {
+  local plugin
+  say 'Installing full Codex plugin set'
+  if ! codex_marketplace "$OFFICIAL_MARKETPLACE" "$OFFICIAL_MARKETPLACE_NAME"; then
+    warn "could not configure $OFFICIAL_MARKETPLACE_NAME for Codex"
+    FULL_FAILURES=$((FULL_FAILURES + 1))
+    return
+  fi
+  for plugin in $FULL_OFFICIAL_PLUGINS; do
+    if ! codex plugin add "$plugin@$OFFICIAL_MARKETPLACE_NAME" >/dev/null; then
+      warn "could not install $plugin for Codex"
+      FULL_FAILURES=$((FULL_FAILURES + 1))
+    fi
+  done
 }
 
 find_codegraph() {
@@ -245,9 +424,52 @@ configure_codegraph() {
   say 'CodeGraph installed and registered; no repositories were indexed'
 }
 
-prepare_instructions
-install_claude_core
-install_codex_core
-configure_codegraph
-apply_instructions
+index_repositories() {
+  local codegraph_cmd
+  local index_number
+  local index_path
+  codegraph_cmd=$(find_codegraph)
+  [[ -n $codegraph_cmd ]] || die 'CodeGraph is required to index repositories'
+  for ((index_number = 0; index_number < INDEX_COUNT; index_number++)); do
+    index_path=${INDEX_PATHS[$index_number]}
+    [[ -d $index_path ]] || die "index path is not a directory: $index_path"
+    if [[ -d $index_path/.codegraph ]]; then
+      "$codegraph_cmd" sync "$index_path"
+    else
+      "$codegraph_cmd" init "$index_path"
+    fi
+  done
+}
+
+parse_args "$@"
+if [[ $DRY_RUN == true ]]; then
+  describe_dry_run
+  exit 0
+fi
+validate_explicit_targets
+if [[ $SKIP_INSTRUCTIONS == false ]]; then
+  prepare_instructions
+fi
+if [[ $INSTALL_CLAUDE == true ]]; then
+  install_claude_core
+  if [[ $FULL_INSTALL == true ]] && command -v claude >/dev/null 2>&1; then
+    install_claude_full
+  fi
+fi
+if [[ $INSTALL_CODEX == true ]]; then
+  install_codex_core
+  if [[ $FULL_INSTALL == true ]] && command -v codex >/dev/null 2>&1; then
+    install_codex_full
+  fi
+fi
+if [[ $SKIP_CODEGRAPH == false ]]; then
+  configure_codegraph
+  index_repositories
+fi
+if [[ $SKIP_INSTRUCTIONS == false ]]; then
+  apply_instructions
+fi
+if ((FULL_FAILURES > 0)); then
+  die "$FULL_FAILURES optional full-plugin installation(s) failed"
+fi
 say 'Setup complete. Restart active agent sessions to load new plugins and instructions.'
