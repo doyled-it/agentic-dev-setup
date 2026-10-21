@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 set -euo pipefail
+umask 077
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=dependencies.env
@@ -27,9 +28,13 @@ DRY_RUN=false
 FULL_FAILURES=0
 INDEX_PATHS=('')
 INDEX_COUNT=0
+PENDING_TRANSACTION=''
 
 cleanup() {
   rm -rf -- "$WORK_DIR"
+  if [[ -n $PENDING_TRANSACTION ]]; then
+    rm -rf -- "$PENDING_TRANSACTION"
+  fi
 }
 trap cleanup EXIT
 
@@ -53,7 +58,7 @@ Usage: ./install.sh [OPTIONS]
 Install the shared agent instructions, core workflow plugins, and CodeGraph.
 
 Options:
-  --full               Also install the documented official plugin set
+  --full               Also install the selected official-marketplace plugins
   --claude-only        Configure Claude Code only
   --codex-only         Configure Codex only
   --skip-codegraph     Do not install or configure CodeGraph
@@ -142,7 +147,7 @@ describe_dry_run() {
 
   say "Would install core plugins for $targets"
   if [[ $FULL_INSTALL == true ]]; then
-    say "Would install the full official plugin set for $targets"
+    say "Would install the extended official-marketplace plugin set for $targets"
   fi
   if [[ $SKIP_CODEGRAPH == false ]]; then
     say 'Would install and configure CodeGraph'
@@ -159,34 +164,49 @@ describe_dry_run() {
   done
 }
 
-count_marker() {
-  local marker=$1
-  local file=$2
-  local count
+managed_block_count() {
+  local file=$1
+  local count_output
 
   if [[ ! -e $file ]]; then
     printf '0\n'
     return
   fi
   [[ -f $file && ! -L $file ]] || die "$file must be a regular file"
-  count=$(grep -Fxc -- "$marker" "$file" || true)
-  printf '%s\n' "$count"
+  if ! count_output=$(awk -v begin="$BEGIN_MARKER" -v end="$END_MARKER" '
+    BEGIN { state=0; count=0; invalid=0 }
+    $0 == begin {
+      if (state != 0 || count != 0) invalid=1
+      state=1
+      count++
+      next
+    }
+    $0 == end {
+      if (state != 1) invalid=1
+      state=2
+      next
+    }
+    END {
+      if (state == 1 || invalid) exit 2
+      print count
+    }
+  ' "$file"); then
+    return 1
+  fi
+  printf '%s\n' "$count_output"
 }
 
 render_managed_file() {
   local target=$1
   local block_file=$2
   local output=$3
-  local begin_count
-  local end_count
+  local block_count
 
-  begin_count=$(count_marker "$BEGIN_MARKER" "$target")
-  end_count=$(count_marker "$END_MARKER" "$target")
-  if [[ $begin_count != "$end_count" || $begin_count -gt 1 ]]; then
+  if ! block_count=$(managed_block_count "$target"); then
     die "$target contains malformed or duplicate agentic-dev-setup markers"
   fi
 
-  if [[ $begin_count == 0 ]]; then
+  if [[ $block_count == 0 ]]; then
     if [[ -f $target ]]; then
       cat -- "$target" >"$output"
       if [[ -s $target ]]; then
@@ -260,6 +280,7 @@ backup_target() {
   if [[ -e $target || -L $target ]]; then
     [[ -f $target && ! -L $target ]] || die "$target must be a regular file"
     cp -p -- "$target" "$transaction/$backup_name"
+    chmod 0600 "$transaction/$backup_name"
     printf '%s|present|%s|%s\n' "$key" "$target" "$backup_name" >>"$transaction/manifest"
   else
     printf '%s|absent|%s|%s\n' "$key" "$target" "$backup_name" >>"$transaction/manifest"
@@ -268,6 +289,7 @@ backup_target() {
 
 apply_instructions() {
   local transaction
+  local transaction_pending
   local stamp
 
   if [[ $INSTRUCTIONS_CHANGED != true ]]; then
@@ -277,44 +299,118 @@ apply_instructions() {
 
   stamp=$(date -u '+%Y%m%dT%H%M%SZ')
   transaction="$BACKUP_ROOT/$stamp-$$"
-  mkdir -p -- "$transaction"
-  : >"$transaction/manifest"
-  backup_target "$transaction" canonical "$CANONICAL_FILE" canonical.AGENTS.md
+  transaction_pending="$BACKUP_ROOT/.pending-$stamp-$$"
+  if [[ -e $BACKUP_ROOT || -L $BACKUP_ROOT ]]; then
+    [[ -d $BACKUP_ROOT && ! -L $BACKUP_ROOT ]] || die "$BACKUP_ROOT must be a directory, not a symlink"
+  fi
+  mkdir -p -- "$BACKUP_ROOT"
+  chmod 0700 "$BACKUP_ROOT"
+  mkdir -m 0700 -- "$transaction_pending"
+  PENDING_TRANSACTION=$transaction_pending
+  : >"$transaction_pending/manifest"
+  chmod 0600 "$transaction_pending/manifest"
+  backup_target "$transaction_pending" canonical "$CANONICAL_FILE" canonical.AGENTS.md
   if [[ $INSTALL_CLAUDE == true ]]; then
-    backup_target "$transaction" claude "$CLAUDE_FILE" claude.CLAUDE.md
+    backup_target "$transaction_pending" claude "$CLAUDE_FILE" claude.CLAUDE.md
   fi
   if [[ $INSTALL_CODEX == true ]]; then
-    backup_target "$transaction" codex "$CODEX_FILE" codex.AGENTS.md
+    backup_target "$transaction_pending" codex "$CODEX_FILE" codex.AGENTS.md
   fi
+  : >"$transaction_pending/COMPLETE"
+  chmod 0600 "$transaction_pending/COMPLETE"
+  mv -- "$transaction_pending" "$transaction"
+  PENDING_TRANSACTION=''
 
   mkdir -p -- "$(dirname "$CANONICAL_FILE")"
   cp -- "$WORK_DIR/canonical.desired" "$CANONICAL_FILE"
-  chmod 0644 "$CANONICAL_FILE"
+  chmod 0600 "$CANONICAL_FILE"
   if [[ $INSTALL_CLAUDE == true ]]; then
     mkdir -p -- "$(dirname "$CLAUDE_FILE")"
     cp -- "$WORK_DIR/claude.desired" "$CLAUDE_FILE"
-    chmod 0644 "$CLAUDE_FILE"
+    chmod 0600 "$CLAUDE_FILE"
   fi
   if [[ $INSTALL_CODEX == true ]]; then
     mkdir -p -- "$(dirname "$CODEX_FILE")"
     cp -- "$WORK_DIR/codex.desired" "$CODEX_FILE"
-    chmod 0644 "$CODEX_FILE"
+    chmod 0600 "$CODEX_FILE"
   fi
   say "Updated global instructions (backup: $transaction)"
+}
+
+marketplace_status() {
+  local file=$1
+  local name=$2
+  local source=$3
+  awk -v wanted_name="$name" -v wanted_source="$source" '
+    BEGIN {
+      in_target=0
+      found=0
+      matched=0
+      source_url="https://github.com/" wanted_source ".git"
+    }
+    {
+      if (index($0, "\"name\"") > 0) {
+        if (index($0, "\"" wanted_name "\"") > 0) {
+          in_target=1
+          found=1
+        } else if (in_target) {
+          in_target=0
+        }
+      }
+      if (in_target && (index($0, "\"" wanted_source "\"") > 0 || index($0, "\"" source_url "\"") > 0)) {
+        matched=1
+      }
+    }
+    END {
+      if (!found) print "missing"
+      else if (matched) print "match"
+      else print "mismatch"
+    }
+  ' "$file"
 }
 
 claude_marketplace() {
   local source=$1
   local name=$2
-  claude plugin marketplace add "$source" >/dev/null 2>&1 ||
-    claude plugin marketplace update "$name" >/dev/null
+  local list_file="$WORK_DIR/claude-marketplaces.json"
+  local status
+
+  claude plugin marketplace list --json >"$list_file"
+  status=$(marketplace_status "$list_file" "$name" "$source")
+  case "$status" in
+    missing)
+      claude plugin marketplace add "$source" >/dev/null
+      ;;
+    match)
+      claude plugin marketplace update "$name" >/dev/null
+      ;;
+    mismatch)
+      warn "Claude marketplace $name does not match expected source $source"
+      return 1
+      ;;
+  esac
 }
 
 codex_marketplace() {
   local source=$1
   local name=$2
-  codex plugin marketplace add "$source" --ref main >/dev/null 2>&1 ||
-    codex plugin marketplace upgrade "$name" >/dev/null
+  local list_file="$WORK_DIR/codex-marketplaces.json"
+  local status
+
+  codex plugin marketplace list --json >"$list_file"
+  status=$(marketplace_status "$list_file" "$name" "$source")
+  case "$status" in
+    missing)
+      codex plugin marketplace add "$source" --ref main >/dev/null
+      ;;
+    match)
+      codex plugin marketplace upgrade "$name" >/dev/null
+      ;;
+    mismatch)
+      warn "Codex marketplace $name does not match expected source $source"
+      return 1
+      ;;
+  esac
 }
 
 install_claude_core() {
@@ -343,7 +439,7 @@ install_claude_full() {
     FULL_FAILURES=$((FULL_FAILURES + 1))
     return
   fi
-  for plugin in $FULL_OFFICIAL_PLUGINS; do
+  for plugin in $EXTENDED_MARKETPLACE_PLUGINS; do
     if ! claude plugin install "$plugin@$OFFICIAL_MARKETPLACE_NAME" -y >/dev/null; then
       warn "could not install $plugin for Claude Code"
       FULL_FAILURES=$((FULL_FAILURES + 1))
@@ -380,7 +476,7 @@ install_codex_full() {
     FULL_FAILURES=$((FULL_FAILURES + 1))
     return
   fi
-  for plugin in $FULL_OFFICIAL_PLUGINS; do
+  for plugin in $EXTENDED_MARKETPLACE_PLUGINS; do
     if ! codex plugin add "$plugin@$OFFICIAL_MARKETPLACE_NAME" >/dev/null; then
       warn "could not install $plugin for Codex"
       FULL_FAILURES=$((FULL_FAILURES + 1))
@@ -399,19 +495,13 @@ find_codegraph() {
 }
 
 install_codegraph_binary() {
-  local installer
-  if command -v npm >/dev/null 2>&1; then
-    npm install -g "$CODEGRAPH_PACKAGE@$CODEGRAPH_VERSION" >/dev/null
-    return
-  fi
-  command -v curl >/dev/null 2>&1 || die 'CodeGraph is missing and neither npm nor curl is available'
-  installer="$WORK_DIR/codegraph-install.sh"
-  curl -fsSL -o "$installer" https://raw.githubusercontent.com/colbymchenry/codegraph/main/install.sh
-  sh "$installer"
+  command -v npm >/dev/null 2>&1 || die 'npm is required to install the pinned CodeGraph package'
+  npm install -g "$CODEGRAPH_PACKAGE@$CODEGRAPH_VERSION" >/dev/null
 }
 
 configure_codegraph() {
   local codegraph_cmd
+  local target
   codegraph_cmd=$(find_codegraph)
   if [[ -z $codegraph_cmd ]]; then
     say "Installing CodeGraph $CODEGRAPH_VERSION"
@@ -419,8 +509,15 @@ configure_codegraph() {
     codegraph_cmd=$(find_codegraph)
   fi
   [[ -n $codegraph_cmd ]] || die 'CodeGraph installation completed but the command was not found'
+  if [[ $INSTALL_CLAUDE == true && $INSTALL_CODEX == true ]]; then
+    target='claude,codex'
+  elif [[ $INSTALL_CLAUDE == true ]]; then
+    target='claude'
+  else
+    target='codex'
+  fi
   "$codegraph_cmd" telemetry off >/dev/null
-  "$codegraph_cmd" install --yes >/dev/null
+  "$codegraph_cmd" install --yes --target "$target" >/dev/null
   say 'CodeGraph installed and registered; no repositories were indexed'
 }
 
@@ -433,10 +530,11 @@ index_repositories() {
   for ((index_number = 0; index_number < INDEX_COUNT; index_number++)); do
     index_path=${INDEX_PATHS[$index_number]}
     [[ -d $index_path ]] || die "index path is not a directory: $index_path"
+    index_path=$(cd "$index_path" && pwd -P)
     if [[ -d $index_path/.codegraph ]]; then
       "$codegraph_cmd" sync "$index_path"
     else
-      "$codegraph_cmd" init "$index_path"
+      "$codegraph_cmd" init "$index_path" --yes
     fi
   done
 }
