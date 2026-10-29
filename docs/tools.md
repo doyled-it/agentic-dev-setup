@@ -22,7 +22,7 @@ The default install is the part of the setup that directly controls development 
 | --- | --- | --- |
 | `superpowers` | [obra/superpowers-marketplace](https://github.com/obra/superpowers-marketplace) | Brainstorming, planning, TDD, debugging, review, worktrees, and finishing. |
 | `development-loop` | [doyled-it/claude-skills](https://github.com/doyled-it/claude-skills) | Connects discovery, design, planning, implementation, and finishing. |
-| `codegraph` | [doyled-it/claude-skills](https://github.com/doyled-it/claude-skills) | Closes missing-index gaps, syncs existing indexes, and guides symbol and impact queries. |
+| `codegraph` | [doyled-it/claude-skills](https://github.com/doyled-it/claude-skills) | Makes creating and syncing indexes mandatory, and guides symbol and impact queries. |
 | `cross-repo-completeness` | [doyled-it/claude-skills](https://github.com/doyled-it/claude-skills) | Checks contracts, consumers, UI, configuration, deployment, tests, and docs across repositories. |
 
 Each plugin is installed through the native Claude Code or Codex plugin manager. Native installation provides one update path and avoids duplicate skill names from copied directories.
@@ -89,7 +89,7 @@ Project-specific authoring toolchains and SDKs, PyYAML, jq, and `timeout` are no
 
 Use `--index PATH` to prepare indexes during installation. The installer runs `codegraph init PATH --yes` when `.codegraph/` is absent and `codegraph sync PATH` when it exists. Repeat the option for sibling repositories.
 
-The development default is to close index gaps. Invoke `using-codegraph`, initialize each missing task-repository index, sync existing ones, and query before broad code searches. An explicit no-index instruction takes precedence. CodeGraph does not support every source type; after a graph check finds no useful symbols for unsupported files, inspect those files directly and record the limitation.
+Indexing is mandatory during development. Invoke `using-codegraph`, initialize each missing task-repository index without asking, sync existing ones, and query before broad code searches. The only exceptions are an explicit no-index instruction and a prohibition on all writes. CodeGraph does not support every source type; after a graph check finds no useful symbols for unsupported files, inspect those files directly and record the limitation.
 
 ## Development environment versions
 

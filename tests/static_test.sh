@@ -241,6 +241,46 @@ for required_heading in "${required_headings[@]}"; do
   require_heading "$required_heading"
 done
 
+index_policy_files=(
+  AGENTS.md
+  README.md
+  SECURITY.md
+  docs/workflow.md
+  docs/tools.md
+  prompts/discovery.md
+  prompts/implementation.md
+)
+
+for policy_file in "${index_policy_files[@]}"; do
+  if grep -Eiq 'mandatory[^.]*index|index[^.]*mandatory' -- "$policy_file"; then
+    pass "$policy_file makes indexing mandatory"
+  else
+    fail "$policy_file does not make indexing mandatory"
+  fi
+  if grep -Eiq 'clos(e|es|ing) (missing-index |index )gaps|overrides (automatic indexing|that default)|development default' -- "$policy_file"; then
+    fail "$policy_file still treats indexing as an overridable default"
+  else
+    pass "$policy_file avoids default-indexing wording"
+  fi
+done
+
+required_index_policy=(
+  'without asking'
+  'after pulls, branch switches, and structural changes'
+  'prohibition on all writes'
+  'is tool guidance, not an operator restriction'
+  'A source-read-only task still creates and syncs the index'
+  'with no behavior change does not need an index'
+)
+
+for required_policy in "${required_index_policy[@]}"; do
+  if grep -Fq -- "$required_policy" AGENTS.md; then
+    pass "AGENTS.md index policy contains: $required_policy"
+  else
+    fail "AGENTS.md index policy is missing: $required_policy"
+  fi
+done
+
 required_ignored_paths=(
   .env
   nested/.env.production
