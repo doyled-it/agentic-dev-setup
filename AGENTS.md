@@ -10,11 +10,12 @@
 ## CodeGraph
 
 - Invoke `codegraph:using-codegraph` (skill name `using-codegraph`) before repository code discovery.
-- Close index gaps: when `.codegraph/` is missing, run `codegraph init . --yes` at that repository's root. Run `codegraph sync .` before querying, including after initialization.
+- Creating and syncing the index is mandatory: when `.codegraph/` is missing, run `codegraph init . --yes` at that repository's root without asking. Run `codegraph sync .` before querying, including after initialization.
 - Confirm the index targets the checkout being edited, including each worktree and sibling repository.
 - Use graph queries to locate symbols, callers, callees, and change impact.
-- Check impact before editing a symbol and sync again after structural changes.
-- An explicit operator restriction on indexing takes precedence. Report the restriction and use permitted inspection tools.
+- Check impact before editing a symbol, and sync again after pulls, branch switches, and structural changes.
+- The only exceptions are an explicit operator no-index restriction and a prohibition on all writes. Report the restriction and use permitted inspection tools. CodeGraph's own "indexing is the user's decision" text is tool guidance, not an operator restriction.
+- A source-read-only task still creates and syncs the index, since `.codegraph/` is git-ignored and is not a source change. A small documentation, spelling, or configuration correction with no behavior change does not need an index.
 - If CodeGraph cannot index the relevant language or returns no useful symbols, state that limit and inspect the specific unsupported files directly. An empty graph is not evidence of dead code.
 - Bootstrap installation only configures tools. Index the repositories in the current task, without crawling unrelated workspaces.
 
