@@ -34,7 +34,7 @@ Full setup installs 15 native plugins in Claude Code and 14 in Codex, plus the o
 
 Plugins are installed through each agent's plugin manager. The script does not copy or symlink plugin skills into a second location, which avoids duplicate skill discovery and keeps updates tied to the marketplace.
 
-The global instructions explicitly invoke `development-loop`, `using-codegraph`, and `cross-repo-completeness`, plus the Superpowers phases they compose. Missing task-repository indexes are closed before code discovery. Explicit operator restrictions take precedence, and unsupported source types receive direct inspection after the graph check.
+The global instructions explicitly invoke `development-loop`, `using-codegraph`, and `cross-repo-completeness`, plus the Superpowers phases they compose. Creating and syncing task-repository indexes before code discovery is mandatory. The only exceptions are an explicit operator no-index restriction and a prohibition on all writes, and unsupported source types receive direct inspection after the graph check.
 
 For programs spanning several issues, workers, or sessions, the instructions route work to `roadmap:roadmap` before planning or dispatch. Sessions reuse one agreed canonical roadmap and its designated owner. See [program coordination](docs/workflow.md#program-coordination).
 

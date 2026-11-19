@@ -8,7 +8,7 @@ This repository installs third-party plugins and can update user-level instructi
 - Plugin hooks and MCP servers can start processes or access data available to the host agent.
 - Marketplace updates can change plugin code after this repository is published.
 - The installer uses the pinned npm package only when the CodeGraph command is absent, then disables its telemetry before agent registration.
-- Bootstrap indexes only explicitly supplied `--index` paths. During development, the workflow initializes missing indexes in task repositories; an explicit operator restriction overrides that default.
+- Bootstrap indexes only explicitly supplied `--index` paths. During development, creating and syncing indexes in task repositories is mandatory; the only exceptions are an explicit operator no-index restriction and a prohibition on all writes.
 
 Use `./install.sh --dry-run` to inspect intended actions. Instruction changes receive a timestamped backup and can be reverted with `./scripts/restore.sh latest`.
 
