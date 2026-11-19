@@ -226,6 +226,7 @@ done
 
 required_headings=(
   '## Repository state'
+  '## Programs and roadmaps'
   '## CodeGraph'
   '## Development workflow'
   '## Test-driven development'
@@ -240,6 +241,12 @@ required_headings=(
 for required_heading in "${required_headings[@]}"; do
   require_heading "$required_heading"
 done
+
+if grep -Fq 'roadmap:roadmap' AGENTS.md; then
+  pass 'canonical instructions name the native roadmap skill'
+else
+  fail 'canonical instructions must route program work to roadmap:roadmap'
+fi
 
 index_policy_files=(
   AGENTS.md

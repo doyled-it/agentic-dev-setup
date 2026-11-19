@@ -51,6 +51,7 @@ superpowers@superpowers-marketplace
 development-loop@doyled-it-skills
 codegraph@doyled-it-skills
 cross-repo-completeness@doyled-it-skills
+roadmap@doyled-it-skills
 ```
 
 The extended selectors use each plugin name from `EXTENDED_MARKETPLACE_PLUGINS` in `dependencies.env` with `@claude-plugins-official`. Claude Security is installed only in Claude Code. Playwright uses the direct MCP registration described below.

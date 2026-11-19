@@ -1,5 +1,7 @@
 # Development workflow
 
+<!-- diataxis: explanation -->
+
 The workflow puts evidence before edits. An agent should know the repository state, the relevant code path, the behavior to change, and the verification command before it writes production code.
 
 ## Evidence and standards
@@ -7,6 +9,12 @@ The workflow puts evidence before edits. An agent should know the repository sta
 An informal retrospective on October 21, 2026 reviewed 25 recent repository-development sessions. Planning or design was visible in 17, branch isolation in 16, subagent use in 15, pull or merge request work in 16, and an explicit review pass in 10. The source sessions are private, so these aggregate counts are context rather than independently auditable research.
 
 The rules below combine those observed practices with standards added to close gaps. In particular, tests and verification appeared often, while preserved evidence of a failing test before implementation appeared less consistently. This workflow therefore requires an explicit failing run for behavior changes.
+
+## Program coordination
+
+Work spanning several issues, workers, or sessions begins by invoking `roadmap:roadmap` (or `roadmap` in a shared-skill runtime). Reuse the existing agreed canonical `roadmap.json`, its designated owner, and approved phase decisions. Agree the roadmap before dispatching workers, and start only issues whose dependencies are Done. Propose work outside the agreed scope before starting it.
+
+Orchestrators run read-only `sync` at each program update. Workers return evidence to the designated owner, who updates and re-renders the canonical roadmap when an issue finishes. This keeps sessions working from the same plan. Single-task work still follows the development loop below.
 
 ## Choose the size of the loop
 

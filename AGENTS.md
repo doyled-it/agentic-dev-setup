@@ -7,6 +7,13 @@
 - Preserve unrelated work and avoid destructive cleanup commands.
 - Work on a feature or fix branch unless the operator directs otherwise.
 
+## Programs and roadmaps
+
+- For a program spanning several issues, workers, or sessions, invoke `roadmap:roadmap` (skill name `roadmap`) before planning or dispatching work.
+- Read and reuse the program's agreed canonical `roadmap.json` and its designated owner. Carry forward approved designs and phase decisions across sessions.
+- Agree the roadmap before starting workers. Work from an issue on it whose dependencies are Done; propose changes outside that scope for agreement first.
+- Orchestrators run read-only `sync` at each program update. The designated owner updates and re-renders the canonical roadmap when an issue finishes; workers report results to that owner rather than creating another roadmap.
+
 ## CodeGraph
 
 - Invoke `codegraph:using-codegraph` (skill name `using-codegraph`) before repository code discovery.
@@ -72,6 +79,7 @@ Invocation means loading the skill through the host's skill tool or reading its 
 - Update `AGENTS.md` when commands, interfaces, architecture, or development conventions change.
 - Keep durable guidance concise and move detailed rationale into project documentation.
 - Keep tool-specific instruction files as imports when the tool supports imports.
+- Keep the core plugin catalog, program routing, installation/removal docs, and disposable-home regressions aligned.
 
 ## Human decisions
 
