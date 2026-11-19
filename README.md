@@ -21,20 +21,22 @@ The default install adds the core workflow. To install the full toolset and its 
 ./install.sh --full
 ```
 
-Full setup installs 14 native plugins in Claude Code and 13 in Codex, plus the official Playwright MCP server as `agentic-playwright`. It downloads pinned language servers and matching Chromium, supplies missing GitHub CLI and Python helpers, and verifies both language servers and browser navigation automatically. Context7 is excluded. See [full setup details](docs/tools.md#extended-plugin-tier) and the additional requirements below.
+Full setup installs 15 native plugins in Claude Code and 14 in Codex, plus the official Playwright MCP server as `agentic-playwright`. It downloads pinned language servers and matching Chromium, supplies missing GitHub CLI and Python helpers, and verifies both language servers and browser navigation automatically. Context7 is excluded. See [full setup details](docs/tools.md#extended-plugin-tier) and the additional requirements below.
 
 ## What the default installs
 
 - A canonical global `AGENTS.md` at `~/.config/agentic-dev-setup/AGENTS.md`.
 - Managed instruction blocks for Claude Code and Codex. Existing content outside the blocks stays intact.
 - [Superpowers](https://github.com/obra/superpowers), installed through its native marketplace.
-- My [development-loop, codegraph, and cross-repo-completeness plugins](https://github.com/doyled-it/claude-skills).
+- My [development-loop, codegraph, cross-repo-completeness, and roadmap plugins](https://github.com/doyled-it/claude-skills).
 - [CodeGraph](https://github.com/colbymchenry/codegraph) configuration with telemetry disabled. Bootstrap indexes only paths supplied with `--index`; development tasks initialize missing indexes in the repositories they need to inspect.
 - Codex multi-agent support when Codex is present.
 
 Plugins are installed through each agent's plugin manager. The script does not copy or symlink plugin skills into a second location, which avoids duplicate skill discovery and keeps updates tied to the marketplace.
 
 The global instructions explicitly invoke `development-loop`, `using-codegraph`, and `cross-repo-completeness`, plus the Superpowers phases they compose. Missing task-repository indexes are closed before code discovery. Explicit operator restrictions take precedence, and unsupported source types receive direct inspection after the graph check.
+
+For programs spanning several issues, workers, or sessions, the instructions route work to `roadmap:roadmap` before planning or dispatch. Sessions reuse one agreed canonical roadmap and its designated owner. See [program coordination](docs/workflow.md#program-coordination).
 
 ## Installer modes
 

@@ -38,6 +38,34 @@ assert_path_absent() {
   [[ ! -e $1 && ! -L $1 ]] || fail "$1 should be absent"
 }
 
+seed_unrelated_configuration() {
+  mkdir -p "$TEST_HOME/.claude/plugins" "$TEST_HOME/.codex"
+  printf '%s\n' '{"hooks":{"Notification":[{"hooks":[{"type":"command","command":"notify-user"}]}]},"enabledPlugins":{"personal@other":true}}' >"$TEST_HOME/.claude/settings.json"
+  printf '%s\n' '{"version":2,"plugins":{"personal@other":[{"scope":"user","installPath":"relative/plugin"}]}}' >"$TEST_HOME/.claude/plugins/installed_plugins.json"
+  printf '%s\n' 'notify = ["notify-user"]' '[plugins."personal@other"]' 'enabled = true' >"$TEST_HOME/.codex/config.toml"
+  cp "$TEST_HOME/.claude/settings.json" "$TEST_SANDBOX/settings.before"
+  cp "$TEST_HOME/.claude/plugins/installed_plugins.json" "$TEST_SANDBOX/plugins.before"
+  cp "$TEST_HOME/.codex/config.toml" "$TEST_SANDBOX/config.before"
+}
+
+assert_unrelated_configuration_preserved() {
+  cmp -s "$TEST_HOME/.claude/settings.json" "$TEST_SANDBOX/settings.before" || fail 'Claude notification/plugin settings changed'
+  cmp -s "$TEST_HOME/.claude/plugins/installed_plugins.json" "$TEST_SANDBOX/plugins.before" || fail 'unrelated Claude plugin registration changed'
+  cmp -s "$TEST_HOME/.codex/config.toml" "$TEST_SANDBOX/config.before" || fail 'Codex notification/plugin configuration changed'
+}
+
+assert_external_instruction_text_preserved() {
+  local runtime=$1
+  local file=$2
+  awk '
+    $0 == "<!-- BEGIN agentic-dev-setup -->" { skipping=1; next }
+    $0 == "<!-- END agentic-dev-setup -->" { skipping=0; next }
+    !skipping { print }
+  ' "$file" >"$TEST_SANDBOX/$runtime.external"
+  printf 'keep %s\nkeep %s suffix\n' "$runtime" "$runtime" >"$TEST_SANDBOX/$runtime.expected"
+  cmp -s "$TEST_SANDBOX/$runtime.external" "$TEST_SANDBOX/$runtime.expected" || fail "$runtime external instruction text changed"
+}
+
 new_sandbox() {
   TEST_SANDBOX=$(mktemp -d "${TMPDIR:-/tmp}/agentic-dev-install.XXXXXX")
   SANDBOXES+=("$TEST_SANDBOX")
@@ -251,12 +279,15 @@ scenario_core_install_is_native_reversible_and_idempotent() {
   write_recording_mock codegraph
   write_npm_mock
 
+  seed_unrelated_configuration
   claude_file="$TEST_HOME/.claude/CLAUDE.md"
   codex_file="$TEST_HOME/.codex/AGENTS.md"
   canonical_file="$TEST_HOME/.config/agentic-dev-setup/AGENTS.md"
   mkdir -p "$(dirname "$claude_file")" "$(dirname "$codex_file")"
-  printf 'keep claude\n' >"$claude_file"
-  printf 'keep codex\n' >"$codex_file"
+  printf '%s\n' 'keep claude' '<!-- BEGIN agentic-dev-setup -->' 'old setup' '<!-- END agentic-dev-setup -->' 'keep claude suffix' >"$claude_file"
+  printf '%s\n' 'keep codex' '<!-- BEGIN agentic-dev-setup -->' 'old setup' '<!-- END agentic-dev-setup -->' 'keep codex suffix' >"$codex_file"
+  cp "$claude_file" "$TEST_SANDBOX/claude.original"
+  cp "$codex_file" "$TEST_SANDBOX/codex.original"
   chmod 0600 "$claude_file" "$codex_file"
 
   run_install >"$TEST_SANDBOX/install.out"
@@ -267,10 +298,12 @@ scenario_core_install_is_native_reversible_and_idempotent() {
   assert_log_contains 'claude plugin install development-loop@doyled-it-skills'
   assert_log_contains 'claude plugin install codegraph@doyled-it-skills'
   assert_log_contains 'claude plugin install cross-repo-completeness@doyled-it-skills'
+  assert_log_contains 'claude plugin install roadmap@doyled-it-skills -y'
   assert_log_contains 'codex plugin marketplace add obra/superpowers-marketplace'
   assert_log_contains 'codex plugin marketplace add doyled-it/claude-skills'
   assert_log_contains 'codex plugin add superpowers@superpowers-marketplace'
   assert_log_contains 'codex plugin add development-loop@doyled-it-skills'
+  assert_log_contains 'codex plugin add roadmap@doyled-it-skills'
   assert_log_contains 'codex features enable multi_agent'
   assert_log_contains 'codegraph telemetry off'
   assert_log_contains 'codegraph install --yes --target claude,codex'
@@ -279,6 +312,11 @@ scenario_core_install_is_native_reversible_and_idempotent() {
   fi
 
   cmp -s "$ROOT/AGENTS.md" "$canonical_file" || fail 'canonical AGENTS.md copy differs'
+  assert_file_contains "$canonical_file" 'roadmap:roadmap'
+  assert_file_contains "$codex_file" 'roadmap:roadmap'
+  assert_unrelated_configuration_preserved
+  assert_external_instruction_text_preserved claude "$claude_file"
+  assert_external_instruction_text_preserved codex "$codex_file"
   assert_file_contains "$claude_file" 'keep claude'
   assert_file_contains "$claude_file" '<!-- BEGIN agentic-dev-setup -->'
   assert_file_contains "$claude_file" "@$TEST_SANDBOX/home\\ with\\ spaces/.config/agentic-dev-setup/AGENTS.md"
@@ -303,10 +341,13 @@ scenario_core_install_is_native_reversible_and_idempotent() {
   cmp -s "$claude_file" "$TEST_SANDBOX/claude.first" || fail 'Claude instructions changed on second install'
   cmp -s "$codex_file" "$TEST_SANDBOX/codex.first" || fail 'Codex instructions changed on second install'
   cmp -s "$canonical_file" "$TEST_SANDBOX/canonical.first" || fail 'canonical instructions changed on second install'
+  assert_unrelated_configuration_preserved
+  [[ $(grep -Fxc 'claude plugin install roadmap@doyled-it-skills -y' "$MOCK_LOG") == 2 ]] || fail 'repeat setup did not request roadmap once per Claude install'
+  [[ $(grep -Fxc 'codex plugin add roadmap@doyled-it-skills' "$MOCK_LOG") == 2 ]] || fail 'repeat setup did not request roadmap once per Codex install'
 
   env HOME="$TEST_HOME" bash "$ROOT/scripts/restore.sh" latest >"$TEST_SANDBOX/restore.out"
-  [[ $(<"$claude_file") == 'keep claude' ]] || fail 'restore did not recover Claude content'
-  [[ $(<"$codex_file") == 'keep codex' ]] || fail 'restore did not recover Codex content'
+  cmp -s "$claude_file" "$TEST_SANDBOX/claude.original" || fail 'restore did not recover Claude content'
+  cmp -s "$codex_file" "$TEST_SANDBOX/codex.original" || fail 'restore did not recover Codex content'
   assert_path_absent "$canonical_file"
   pass 'core install is native, reversible, and idempotent'
 }
@@ -496,12 +537,34 @@ scenario_agent_targeting_and_explicit_missing_tool() {
   write_recording_mock codex
   write_recording_mock codegraph
   write_npm_mock
+  seed_unrelated_configuration
+  printf 'keep unselected Codex instructions\n' >"$TEST_HOME/.codex/AGENTS.md"
+  cp "$TEST_HOME/.codex/AGENTS.md" "$TEST_SANDBOX/codex.before"
   run_install --claude-only >"$TEST_SANDBOX/install.out"
+  assert_log_contains 'claude plugin install roadmap@doyled-it-skills -y'
+  assert_file_contains "$TEST_HOME/.config/agentic-dev-setup/AGENTS.md" 'roadmap:roadmap'
   if grep -Fq 'codex ' "$MOCK_LOG"; then
     fail 'Claude-only mode invoked Codex'
   fi
-  assert_path_absent "$TEST_HOME/.codex/AGENTS.md"
+  cmp -s "$TEST_HOME/.codex/AGENTS.md" "$TEST_SANDBOX/codex.before" || fail 'Claude-only mode changed Codex instructions'
+  assert_unrelated_configuration_preserved
   assert_log_contains 'codegraph install --yes --target claude'
+
+  new_sandbox
+  write_recording_mock claude
+  write_recording_mock codex
+  write_recording_mock codegraph
+  write_npm_mock
+  seed_unrelated_configuration
+  printf 'keep unselected Claude instructions\n' >"$TEST_HOME/.claude/CLAUDE.md"
+  cp "$TEST_HOME/.claude/CLAUDE.md" "$TEST_SANDBOX/claude.before"
+  run_install --codex-only >"$TEST_SANDBOX/install.out"
+  assert_log_contains 'codex plugin add roadmap@doyled-it-skills'
+  assert_log_contains 'codegraph install --yes --target codex'
+  assert_file_contains "$TEST_HOME/.codex/AGENTS.md" 'roadmap:roadmap'
+  if grep -Fq 'claude ' "$MOCK_LOG"; then fail 'Codex-only mode invoked Claude'; fi
+  cmp -s "$TEST_HOME/.claude/CLAUDE.md" "$TEST_SANDBOX/claude.before" || fail 'Codex-only mode changed Claude instructions'
+  assert_unrelated_configuration_preserved
 
   new_sandbox
   write_recording_mock claude
@@ -547,11 +610,26 @@ scenario_opt_outs_skip_requested_components() {
 
 scenario_dry_run_makes_no_changes() {
   new_sandbox
+  write_recording_mock claude
+  write_recording_mock codex
+  write_recording_mock codegraph
+  write_npm_mock
+  run_install --full --dry-run >"$TEST_SANDBOX/fresh.out"
+  [[ ! -s $MOCK_LOG ]] || fail 'fresh dry-run invoked an external command'
+  assert_path_absent "$TEST_HOME/.config/agentic-dev-setup"
+  assert_path_absent "$TEST_HOME/.claude"
+  assert_path_absent "$TEST_HOME/.codex"
+  seed_unrelated_configuration
+  printf 'keep dry-run Claude instructions\n' >"$TEST_HOME/.claude/CLAUDE.md"
+  printf 'keep dry-run Codex instructions\n' >"$TEST_HOME/.codex/AGENTS.md"
+  cp "$TEST_HOME/.claude/CLAUDE.md" "$TEST_SANDBOX/claude.before"
+  cp "$TEST_HOME/.codex/AGENTS.md" "$TEST_SANDBOX/codex.before"
   run_install --full --dry-run >"$TEST_SANDBOX/install.out"
   [[ ! -s $MOCK_LOG ]] || fail 'dry-run invoked an external command'
   assert_path_absent "$TEST_HOME/.config/agentic-dev-setup"
-  assert_path_absent "$TEST_HOME/.claude/CLAUDE.md"
-  assert_path_absent "$TEST_HOME/.codex/AGENTS.md"
+  cmp -s "$TEST_HOME/.claude/CLAUDE.md" "$TEST_SANDBOX/claude.before" || fail 'dry-run changed Claude instructions'
+  cmp -s "$TEST_HOME/.codex/AGENTS.md" "$TEST_SANDBOX/codex.before" || fail 'dry-run changed Codex instructions'
+  assert_unrelated_configuration_preserved
   assert_file_contains "$TEST_SANDBOX/install.out" 'Would install core plugins'
   assert_file_contains "$TEST_SANDBOX/install.out" 'Would install the extended official-marketplace plugin set'
   pass 'dry-run reports work without changing the system'
