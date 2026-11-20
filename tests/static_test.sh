@@ -350,7 +350,7 @@ orchestration_doc_text=(
   'docs/workflow.md|level 1 adds a merge steward'
   'docs/workflow.md|full suite once per issue'
   'docs/tools.md|needs roadmap 1.2.0 or newer'
-  'docs/tools.md|the claude-skills change that ships it merges first'
+  'docs/tools.md|Roadmap 1.2.0 shipped in doyled-it/doyled-it-skills#16.'
   'README.md|orchestration levels'
   'README.md|roadmap 1.2.0 or newer'
 )
