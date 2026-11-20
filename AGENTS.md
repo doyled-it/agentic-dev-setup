@@ -13,6 +13,11 @@
 - Read and reuse the program's agreed canonical `roadmap.json` and its designated owner. Carry forward approved designs and phase decisions across sessions.
 - Agree the roadmap before starting workers. Work from an issue on it whose dependencies are Done; propose changes outside that scope for agreement first.
 - Orchestrators run read-only `sync` at each program update. The designated owner updates and re-renders the canonical roadmap when an issue finishes; workers report results to that owner rather than creating another roadmap.
+- Orchestrators follow the roadmap skill's levels reference: one level 1 owner per program, a level 2 lead per active epic, and level 3 workers under each lead.
+- At program kickoff, level 1 asks the user for the model and effort per level and the parallel epic cap, offering defaults. Record the answer in `roadmap.json` and reuse it in every later session, brief, and handoff.
+- Only level 1 asks the user. Leads escalate consequential decisions to level 1 with a recommendation, and workers ask their lead.
+- A lead denies a worker's non-essential permission prompt with a reason, and escalates an essential one to level 1 with the exact command and a recommendation.
+- Add a merge steward under level 1 when two or more epics or streams land on one base branch.
 
 ## CodeGraph
 
@@ -38,6 +43,8 @@ For meaningful features and bug fixes, follow this sequence:
 6. Invoke `superpowers:requesting-code-review`, `superpowers:verification-before-completion`, and `superpowers:finishing-a-development-branch` to verify and prepare the authorized delivery.
 
 Small documentation, spelling, and configuration corrections may use a shorter path when they do not change behavior.
+Fit ceremony to risk. Risky work (security, credentials, data migrations, user-facing UI, shared interfaces) keeps fresh workers and the most capable reviewer. The lead or controller does small or mechanical work itself or batches it into one worker, with targeted tests and a cheaper review. Run the full check once per issue; every gate still passes on its own evidence.
+Run a real external tool that can write state only in a sandbox with a throwaway HOME, and verify any claim that nothing changed against file times.
 Use the installed skill's documented name when a host exposes a different namespace. If a skill is unavailable, disclose that and perform its phase directly.
 Invocation means loading the skill through the host's skill tool or reading its `SKILL.md` when no loader exists. Mentioning a skill in a plan or final message is insufficient.
 

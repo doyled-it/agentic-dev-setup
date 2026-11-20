@@ -36,7 +36,7 @@ Plugins are installed through each agent's plugin manager. The script does not c
 
 The global instructions explicitly invoke `development-loop`, `using-codegraph`, and `cross-repo-completeness`, plus the Superpowers phases they compose. Creating and syncing task-repository indexes before code discovery is mandatory. The only exceptions are an explicit operator no-index restriction and a prohibition on all writes, and unsupported source types receive direct inspection after the graph check.
 
-For programs spanning several issues, workers, or sessions, the instructions route work to `roadmap:roadmap` before planning or dispatch. Sessions reuse one agreed canonical roadmap and its designated owner. See [program coordination](docs/workflow.md#program-coordination).
+For programs spanning several issues, workers, or sessions, the instructions route work to `roadmap:roadmap` before planning or dispatch. Sessions reuse one agreed canonical roadmap and its designated owner. Orchestrators follow the roadmap skill's three orchestration levels, and only the level 1 orchestrator asks the user. Process scales with risk. See [program coordination](docs/workflow.md#program-coordination).
 
 ## Installer modes
 

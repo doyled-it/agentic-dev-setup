@@ -16,6 +16,12 @@ Work spanning several issues, workers, or sessions begins by invoking `roadmap:r
 
 Orchestrators run read-only `sync` at each program update. Workers return evidence to the designated owner, who updates and re-renders the canonical roadmap when an issue finishes. This keeps sessions working from the same plan. Single-task work still follows the development loop below.
 
+Orchestrators follow the levels reference in the roadmap skill. Level 1 is the program orchestrator: it owns the canonical roadmap and is the session the user talks to. Each active epic has a level 2 lead, and level 3 workers run single tasks, reviews, or fix rounds under a lead. At kickoff, level 1 asks the user once for the model and effort at each level and the parallel epic cap, offering defaults. It records the answer in `roadmap.json`, and later sessions, briefs, and handoffs reuse it instead of asking again.
+
+Only level 1 asks the user. Workers ask their lead. A lead makes routine calls inside the agreed spec and escalates consequential ones to level 1 with a recommendation: scope or dependency changes, cross-epic interfaces, user-visible behavior the spec leaves open, security or privacy, new dependencies or cost, and anything irreversible or outward-facing. A lead never opens the user's question surface itself. It denies a worker's non-essential permission prompt with a reason, or escalates an essential one with the exact command and a recommendation.
+
+When two or more epics or streams land on one base branch, level 1 adds a merge steward. The steward queues merges in dependency order, rebases onto the current base, runs CI on the merged result, and keeps the base green. It merges only under authority level 1 has recorded. With one active epic, the role stays off.
+
 ## Choose the size of the loop
 
 A spelling correction or a comment cleanup can use a short path. A behavior change uses the full loop. Work that changes architecture, contracts, data ownership, or several repositories needs a written design and a plan with separate verification points.
@@ -77,6 +83,10 @@ Delegate only when a task has a narrow owner, a clear input, and a specific retu
 Keep dependent edits sequential. Run independent research or reviews in parallel. Give every implementation agent the same design, repository instructions, test command, and commit boundary. Review each task before accepting it into the whole change.
 
 Use `superpowers:subagent-driven-development` with `superpowers:test-driven-development`. When the host lacks subagents or the operator requests inline execution, use `superpowers:executing-plans` and preserve the same verification and review gates.
+
+Fit ceremony to risk. Uniform ceremony (a cold worker per task, the full suite after every task, the most capable reviewer for a rename) makes a team slower than one person working directly. Risky tasks keep a fresh worker per task and the most capable reviewer: security, credentials, data migrations, user-facing UI, and shared interfaces. The lead or controller does small or mechanical tasks itself, such as renames, one-line fixes, and same-shape edits, or batches them into one worker, with targeted tests and a review on a cheaper tier. The full check runs once per issue, before its review gate. Ceremony scales; gates do not, and every gate still passes on its own evidence.
+
+A worker that runs a real external tool able to write state, such as an agent CLI or an installer, runs it only in a sandbox. Use one command that sets a throwaway HOME, so a failure earlier in a chain cannot run the tool against the real home. Afterwards, list files outside the sandbox that changed during the run. The lead checks any report that nothing changed against those file times before accepting it.
 
 ## 6. Review the complete change
 

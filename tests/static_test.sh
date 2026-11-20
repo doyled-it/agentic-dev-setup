@@ -288,6 +288,58 @@ for required_policy in "${required_index_policy[@]}"; do
   fi
 done
 
+required_orchestration_policy=(
+  "roadmap skill's levels reference"
+  'one level 1 owner per program'
+  'a level 2 lead per active epic'
+  'model and effort per level and the parallel epic cap'
+  'reuse it in every later session, brief, and handoff'
+  'Only level 1 asks the user.'
+  'consequential decisions to level 1 with a recommendation'
+  'permission prompt with a reason'
+  'Fit ceremony to risk.'
+  'security, credentials, data migrations, user-facing UI, shared interfaces'
+  'Run the full check once per issue'
+  'throwaway HOME'
+  'against file times'
+  'merge steward under level 1'
+  'two or more epics or streams land on one base branch'
+)
+
+for required_policy in "${required_orchestration_policy[@]}"; do
+  if grep -Fq -- "$required_policy" AGENTS.md; then
+    pass "AGENTS.md orchestration policy contains: $required_policy"
+  else
+    fail "AGENTS.md orchestration policy is missing: $required_policy"
+  fi
+done
+
+if grep -Eiq 'claude-(fable|opus|sonnet|haiku)|\b(fable|opus|sonnet|haiku) [0-9]|gpt-[0-9]' AGENTS.md; then
+  fail 'AGENTS.md must state orchestration policy without model ids'
+else
+  pass 'AGENTS.md states orchestration policy without model ids'
+fi
+
+orchestration_doc_text=(
+  'docs/workflow.md|levels reference'
+  'docs/workflow.md|Only level 1 asks the user'
+  'docs/workflow.md|Fit ceremony to risk'
+  'docs/workflow.md|throwaway HOME'
+  'docs/workflow.md|merge steward'
+  'docs/tools.md|levels reference'
+  'README.md|orchestration levels'
+)
+
+for doc_entry in "${orchestration_doc_text[@]}"; do
+  doc_file=${doc_entry%%|*}
+  doc_text=${doc_entry#*|}
+  if grep -Fq -- "$doc_text" "$doc_file"; then
+    pass "$doc_file documents: $doc_text"
+  else
+    fail "$doc_file does not document: $doc_text"
+  fi
+done
+
 required_ignored_paths=(
   .env
   nested/.env.production
