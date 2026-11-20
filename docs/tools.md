@@ -30,7 +30,7 @@ The default install is the part of the setup that directly controls development 
 
 Each plugin is installed through the native Claude Code or Codex plugin manager. Native installation provides one update path and avoids duplicate skill names from copied directories.
 
-The roadmap selector is `roadmap@doyled-it-skills` for both runtimes. The default and full tiers include it for each selected runtime. Global instructions invoke `roadmap:roadmap` for [program coordination](workflow.md#program-coordination) and route orchestrators to the skill's levels reference, which ships with roadmap 1.2.0.
+The roadmap selector is `roadmap@doyled-it-skills` for both runtimes. The default and full tiers include it for each selected runtime. Global instructions invoke `roadmap:roadmap` for [program coordination](workflow.md#program-coordination) and route orchestrators to the skill's levels reference, which needs roadmap 1.2.0 or newer. Roadmap 1.2.0 is not released until the claude-skills change that ships it merges first, so merge that change and confirm the marketplace serves 1.2.0 before this one.
 
 ## Extended plugin tier
 

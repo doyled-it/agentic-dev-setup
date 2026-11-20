@@ -40,6 +40,8 @@ assert_orchestration_levels_routed() {
   assert_file_contains "$file" 'Only level 1 asks the user.'
   assert_file_contains "$file" 'Fit ceremony to risk.'
   assert_file_contains "$file" 'throwaway HOME'
+  assert_file_contains "$file" 'prints HOME first'
+  assert_file_contains "$file" 'needs roadmap 1.2.0 or newer'
   assert_file_contains "$file" 'merge steward under level 1'
 }
 

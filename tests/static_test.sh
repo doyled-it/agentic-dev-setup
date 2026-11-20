@@ -288,22 +288,35 @@ for required_policy in "${required_index_policy[@]}"; do
   fi
 done
 
+# shellcheck disable=SC2016  # literal backticks are the text being pinned
 required_orchestration_policy=(
   "roadmap skill's levels reference"
+  'needs roadmap 1.2.0 or newer'
   'one level 1 owner per program'
   'a level 2 lead per active epic'
   'model and effort per level and the parallel epic cap'
+  "tiers the user's instructions already pin"
   'reuse it in every later session, brief, and handoff'
   'Only level 1 asks the user.'
   'consequential decisions to level 1 with a recommendation'
+  'scope or dependency changes, cross-epic interfaces'
   'permission prompt with a reason'
+  'with the exact command and a recommendation'
   'Fit ceremony to risk.'
-  'security, credentials, data migrations, user-facing UI, shared interfaces'
-  'Run the full check once per issue'
+  'security, credentials, data migrations, user-facing UI, cross-epic interfaces'
+  'every gate still passes on its own evidence'
+  'Run targeted tests per task and the full check once per issue, before its review gate and before any completion claim'
+  'Refactor only while the focused tests for the change remain green'
+  'the relevant full suite once per issue'
+  'only as one `env -i HOME=<scratch>` command'
   'throwaway HOME'
+  'prints HOME first'
+  'by mtime'
   'against file times'
   'merge steward under level 1'
   'two or more epics or streams land on one base branch'
+  'only under authority level 1 recorded'
+  'stays off with one active epic'
 )
 
 for required_policy in "${required_orchestration_policy[@]}"; do
@@ -314,20 +327,32 @@ for required_policy in "${required_orchestration_policy[@]}"; do
   fi
 done
 
-if grep -Eiq 'claude-(fable|opus|sonnet|haiku)|\b(fable|opus|sonnet|haiku) [0-9]|gpt-[0-9]' AGENTS.md; then
-  fail 'AGENTS.md must state orchestration policy without model ids'
+# The sandbox rule lives under Verification, not in the development workflow sequence.
+if awk '/^## /{sec=$0} /env -i HOME=<scratch>/{print sec}' AGENTS.md | grep -Fxq '## Verification'; then
+  pass 'AGENTS.md sandbox rule sits under Verification'
 else
-  pass 'AGENTS.md states orchestration policy without model ids'
+  fail 'AGENTS.md sandbox rule must sit under Verification'
+fi
+
+# Policy text names no model: no Claude or GPT ids, bare tier names, or other vendor ids.
+if grep -Eiq 'claude-|gpt-[0-9]|gemini-|codex-[a-z0-9]|\b(fable|opus|sonnet|haiku)\b|\bo[0-9]\b' AGENTS.md; then
+  fail 'AGENTS.md must state orchestration policy without model ids or tier names'
+else
+  pass 'AGENTS.md states orchestration policy without model ids or tier names'
 fi
 
 orchestration_doc_text=(
-  'docs/workflow.md|levels reference'
-  'docs/workflow.md|Only level 1 asks the user'
-  'docs/workflow.md|Fit ceremony to risk'
-  'docs/workflow.md|throwaway HOME'
-  'docs/workflow.md|merge steward'
-  'docs/tools.md|levels reference'
+  'docs/workflow.md|follow the levels reference in the roadmap skill'
+  'docs/workflow.md|needs roadmap 1.2.0 or newer'
+  'docs/workflow.md|Only level 1 asks the user.'
+  'docs/workflow.md|Fit ceremony to risk.'
+  'docs/workflow.md|env -i HOME=<scratch>'
+  'docs/workflow.md|level 1 adds a merge steward'
+  'docs/workflow.md|full suite once per issue'
+  'docs/tools.md|needs roadmap 1.2.0 or newer'
+  'docs/tools.md|the claude-skills change that ships it merges first'
   'README.md|orchestration levels'
+  'README.md|roadmap 1.2.0 or newer'
 )
 
 for doc_entry in "${orchestration_doc_text[@]}"; do
