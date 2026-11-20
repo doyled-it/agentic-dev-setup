@@ -34,6 +34,17 @@ assert_log_contains() {
   assert_file_contains "$MOCK_LOG" "$1"
 }
 
+assert_orchestration_levels_routed() {
+  local file=$1
+  assert_file_contains "$file" "roadmap skill's levels reference"
+  assert_file_contains "$file" 'Only level 1 asks the user.'
+  assert_file_contains "$file" 'Fit ceremony to risk.'
+  assert_file_contains "$file" 'throwaway HOME'
+  assert_file_contains "$file" 'prints HOME first'
+  assert_file_contains "$file" 'needs roadmap 1.2.0 or newer'
+  assert_file_contains "$file" 'merge steward under level 1'
+}
+
 assert_path_absent() {
   [[ ! -e $1 && ! -L $1 ]] || fail "$1 should be absent"
 }
@@ -314,6 +325,8 @@ scenario_core_install_is_native_reversible_and_idempotent() {
   cmp -s "$ROOT/AGENTS.md" "$canonical_file" || fail 'canonical AGENTS.md copy differs'
   assert_file_contains "$canonical_file" 'roadmap:roadmap'
   assert_file_contains "$codex_file" 'roadmap:roadmap'
+  assert_orchestration_levels_routed "$canonical_file"
+  assert_orchestration_levels_routed "$codex_file"
   assert_unrelated_configuration_preserved
   assert_external_instruction_text_preserved claude "$claude_file"
   assert_external_instruction_text_preserved codex "$codex_file"
@@ -543,6 +556,7 @@ scenario_agent_targeting_and_explicit_missing_tool() {
   run_install --claude-only >"$TEST_SANDBOX/install.out"
   assert_log_contains 'claude plugin install roadmap@doyled-it-skills -y'
   assert_file_contains "$TEST_HOME/.config/agentic-dev-setup/AGENTS.md" 'roadmap:roadmap'
+  assert_orchestration_levels_routed "$TEST_HOME/.config/agentic-dev-setup/AGENTS.md"
   if grep -Fq 'codex ' "$MOCK_LOG"; then
     fail 'Claude-only mode invoked Codex'
   fi
@@ -562,6 +576,7 @@ scenario_agent_targeting_and_explicit_missing_tool() {
   assert_log_contains 'codex plugin add roadmap@doyled-it-skills'
   assert_log_contains 'codegraph install --yes --target codex'
   assert_file_contains "$TEST_HOME/.codex/AGENTS.md" 'roadmap:roadmap'
+  assert_orchestration_levels_routed "$TEST_HOME/.codex/AGENTS.md"
   if grep -Fq 'claude ' "$MOCK_LOG"; then fail 'Codex-only mode invoked Claude'; fi
   cmp -s "$TEST_HOME/.claude/CLAUDE.md" "$TEST_SANDBOX/claude.before" || fail 'Codex-only mode changed Claude instructions'
   assert_unrelated_configuration_preserved

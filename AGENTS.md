@@ -13,6 +13,11 @@
 - Read and reuse the program's agreed canonical `roadmap.json` and its designated owner. Carry forward approved designs and phase decisions across sessions.
 - Agree the roadmap before starting workers. Work from an issue on it whose dependencies are Done; propose changes outside that scope for agreement first.
 - Orchestrators run read-only `sync` at each program update. The designated owner updates and re-renders the canonical roadmap when an issue finishes; workers report results to that owner rather than creating another roadmap.
+- Orchestrators follow the roadmap skill's levels reference (needs roadmap 1.2.0 or newer): one level 1 owner per program, a level 2 lead per active epic, and level 3 workers under each lead.
+- At program kickoff, level 1 asks the user for the model and effort per level and the parallel epic cap, offering defaults, with the tiers the user's instructions already pin as the default answer. Record the answer in `roadmap.json` and reuse it in every later session, brief, and handoff.
+- Only level 1 asks the user. Leads escalate consequential decisions to level 1 with a recommendation (scope or dependency changes, cross-epic interfaces, security or privacy, new dependencies or cost, anything irreversible or outward-facing), and workers ask their lead.
+- A lead denies a worker's non-essential permission prompt with a reason, and escalates an essential one to level 1 with the exact command and a recommendation.
+- Add a merge steward under level 1 when two or more epics or streams land on one base branch. It merges only under authority level 1 recorded, and stays off with one active epic.
 
 ## CodeGraph
 
@@ -40,13 +45,14 @@ For meaningful features and bug fixes, follow this sequence:
 Small documentation, spelling, and configuration corrections may use a shorter path when they do not change behavior.
 Use the installed skill's documented name when a host exposes a different namespace. If a skill is unavailable, disclose that and perform its phase directly.
 Invocation means loading the skill through the host's skill tool or reading its `SKILL.md` when no loader exists. Mentioning a skill in a plan or final message is insufficient.
+Fit ceremony to risk. Risky work (security, credentials, data migrations, user-facing UI, cross-epic interfaces) keeps fresh workers and the most capable reviewer. The lead or controller does small or mechanical work itself or batches it into one worker, with targeted tests and a cheaper review. Run targeted tests per task and the full check once per issue, before its review gate and before any completion claim; every gate still passes on its own evidence.
 
 ## Test-driven development
 
 - Follow RED, GREEN, REFACTOR for every behavior change.
 - Write one focused test and run it to confirm the expected failure.
 - Add the smallest implementation that makes the test pass.
-- Refactor only while the focused test and full suite remain green.
+- Refactor only while the focused tests for the change remain green; the full suite runs once per issue, before its review gate.
 - Keep the failure and passing output as completion evidence.
 
 ## Cross-repository changes
@@ -67,7 +73,8 @@ Invocation means loading the skill through the host's skill tool or reading its 
 
 ## Verification
 
-- Run the focused tests, the relevant full suite, and the repository lint or static checks.
+- Run the focused tests, the relevant full suite once per issue before its review gate and before any completion claim, and the repository lint or static checks.
+- Run a real external tool that can write state only as one `env -i HOME=<scratch>` command with a throwaway HOME that prints HOME first, so a failure earlier in a chain cannot reach the real home. Afterwards list files touched outside the scratch directory by mtime, and verify any claim that nothing changed against file times.
 - Verify executable dependencies and server startup when changing setup steps; a plugin inventory alone does not establish that a tool works.
 - Use a maintained secret scanner before publication; the custom static test provides supplemental repository-specific checks.
 - Read the command output and confirm exit status before making a completion claim.

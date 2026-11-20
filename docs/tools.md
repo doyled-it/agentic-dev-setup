@@ -30,7 +30,7 @@ The default install is the part of the setup that directly controls development 
 
 Each plugin is installed through the native Claude Code or Codex plugin manager. Native installation provides one update path and avoids duplicate skill names from copied directories.
 
-The roadmap selector is `roadmap@doyled-it-skills` for both runtimes. The default and full tiers include it for each selected runtime. Global instructions invoke `roadmap:roadmap` for [program coordination](workflow.md#program-coordination).
+The roadmap selector is `roadmap@doyled-it-skills` for both runtimes. The default and full tiers include it for each selected runtime. Global instructions invoke `roadmap:roadmap` for [program coordination](workflow.md#program-coordination) and route orchestrators to the skill's levels reference, which needs roadmap 1.2.0 or newer. Roadmap 1.2.0 shipped in doyled-it/doyled-it-skills#16.
 
 ## Extended plugin tier
 
@@ -108,7 +108,7 @@ The versions in `dependencies.env` record the development workstation when this 
 
 The local suite uses recording mocks. The separate [live validation runner and dated results](validation.md) document actual installations and fresh-agent tasks on these versions. They provide a tested environment rather than a compatibility guarantee. Rerun the relevant checks after changing a pin, marketplace source, plugin name, or CLI command.
 
-The roadmap catalog and instruction-routing regressions use disposable homes and recording mocks. Actual native roadmap installation, runtime restart, fresh-session discovery and behavior, and verification on other hosts remain pending; the historical validation results do not establish those checks.
+The roadmap catalog and instruction-routing regressions use disposable homes and recording mocks. Actual native roadmap installation, runtime restart, fresh-session discovery and behavior, and verification on other hosts remain pending; the historical validation results do not establish those checks. The same applies to the orchestration levels: static and disposable-home checks pin the routing text, and fresh-session behavior with roadmap 1.2.0 is not yet validated.
 
 ## Updating the setup
 
